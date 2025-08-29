@@ -244,6 +244,9 @@ aieo_industry %>%
 )
 
 
+# MAKE FILE TO THEN EDIT MANUALLY IN SPREADSHEET----
+
+
 #can work with that / match rest
 #But gonna have to fettle manually...
 write_csv(chk,'local/data/AIOE_list_forSIC2007link.csv')
@@ -274,6 +277,88 @@ siclookup2 %>%
   select(SIC_3DIGIT_NAME,SIC_4DIGIT_NAME) %>% 
   distinct() %>% 
   View
+
+
+
+
+# RELOAD MANUAL EDIT FOR CHECKS----
+
+# I am choosing from 2 to 5 digit, picking a single one that’s most applicable. SO: how this will have to work re. Assigning of the AIOE numbers:
+# Assign the highest digit levels first THEN try the next one down if no match etc.
+# So e.g. “2841 : Manufacture of metal forming machinery” can get its own AIOE number; “281 : Manufacture of general purpose machinery” can go next; “28 : Manufacture of machinery and equipment n.e.c.” would be last and attach to any remaining with that code. Simplez!
+# I’ve gone for avoiding many-to-one / US-to-UK and stuck just to one-to-many US-to-UK. So that means some AIOE values will need to be averaged for a particular SIC07 sector.
+# Slight change here: I am now repeating US sector rows. Not a problem if one value matches to several UK SICs – it just gets put in each. E.g. doing this with education from primary to secondary.
+
+usuk <- read_csv('data/AIOE_list_forSIC2007link.csv')
+
+#Checks
+#There should be ONE sector per row, either 2,3,4 or 5 digit UK SIC
+# nacount <- usuk %>% 
+#   select(contains("SIC")) %>% 
+#   rowwise() %>% 
+#   mutate(NAcount = mean(!is.na(c_across(everything())))) %>% 
+#   ungroup() 
+
+#Oops missed a few...
+#Fixed, now only one sector per row, just one between 2 and 5 digit
+
+
+#Next, let's check how many / which UK sectors are missing from that list
+#Easiest way is probably to apply to a copy of the lookup
+#Marking only those we've used
+#So e.g. if we've used a 2 digit, that will fill all 5 digit.
+#Gaps will be visible there
+
+siccheck <- siclookup2 %>% 
+  select(contains("DIGIT_NAME")) %>% 
+  select(!contains("GVA"))
+
+#reminder, we just checked, there'll be only one of these present per row
+siccheck <- siccheck %>% 
+  mutate(sectorpresentinAIOE = case_when(
+    SIC_2DIGIT_NAME %in% usuk$SIC_2DIGIT_NAME ~ "2digit",
+    SIC_3DIGIT_NAME %in% usuk$SIC_3DIGIT_NAME ~ "3digit",
+    SIC_4DIGIT_NAME %in% usuk$SIC_4DIGIT_NAME ~ "4digit",
+    SIC_5DIGIT_NAME %in% usuk$SIC_5DIGIT_NAME ~ "5digit",
+    .default = NA
+  )
+  )
+
+#OK, on first check we've got... 81.4% match
+#Mostly farming missing. Not too bad.
+#But some fixing to do...
+table(!is.na(siccheck$sectorpresentinAIOE)) %>% prop.table
+
+#Looking at the orig, it doesn't actually contain agri/farming sectors, only processing 
+#Except logging, for some reason, that's still there...
+#So we'd have to repeat that...
+
+#Which would look like this:
+#Note, also removing the final four, which don't apply to any sectors we can use 
+#(household work, extra terr etc)
+siccheck.minusagri <- siccheck %>% 
+  slice(c(35,42:(nrow(siccheck)-4))) %>% 
+  mutate(sectorpresentinAIOE = case_when(
+    SIC_2DIGIT_NAME %in% usuk$SIC_2DIGIT_NAME ~ "2digit",
+    SIC_3DIGIT_NAME %in% usuk$SIC_3DIGIT_NAME ~ "3digit",
+    SIC_4DIGIT_NAME %in% usuk$SIC_4DIGIT_NAME ~ "4digit",
+    SIC_5DIGIT_NAME %in% usuk$SIC_5DIGIT_NAME ~ "5digit",
+    .default = NA
+  )
+  )
+
+#85.7%, still plenty to fill
+table(!is.na(siccheck.minusagri$sectorpresentinAIOE)) %>% prop.table
+
+#Search and repace of missing SIC07 sectors
+#Got to "development of building projects"
+
+
+
+
+
+
+
 
 
 
