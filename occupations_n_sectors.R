@@ -574,6 +574,23 @@ saveRDS(ch_gm_aiie,'local/data/ch_gm_aiie_draft1.rds')
 
 # EXAMINE AIIE NUMBERS FOR GM----
 
+#First, let's sanity check the AIIE values
+#Above the mean is more exposed, below is less
+#Check on sectors...
+ch_gm_aiie <- ch_gm_aiie %>% 
+  left_join(
+    siclookup2,
+    by = c('fivedig_SICCode.SicText_1' = 'SIC_5DIGIT_CODE')
+  )
+
+#Average AIIE score should be sensible for sections, right?
+#Yep
+ch_gm_aiie %>% 
+  st_set_geometry(NULL) %>% 
+  group_by(SIC_SECTION_NAME) %>% 
+  summarise(mean = mean(AIIEfinal, na.rm=T))
+
+
 #Options - can weight by jobs...
 
 #Taken from here
