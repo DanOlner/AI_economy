@@ -1,7 +1,9 @@
 #Exploring occupation options
 library(tidyverse)
 library(nomisr)
+library(sf)
 source('functions/helpers.R')
+source('functions/ad_hoc_functions.R')
 
 # CENSUS 2021 OCCUPATIONS----
 
@@ -293,11 +295,13 @@ usuk <- read_csv('data/AIOE_list_forSIC2007link.csv')
 
 #Checks
 #There should be ONE sector per row, either 2,3,4 or 5 digit UK SIC
-# nacount <- usuk %>% 
-#   select(contains("SIC")) %>% 
-#   rowwise() %>% 
-#   mutate(NAcount = mean(!is.na(c_across(everything())))) %>% 
-#   ungroup() 
+# nacount <- usuk %>%
+#   select(contains("SIC")) %>%
+#   rowwise() %>%
+#   mutate(NAcount = mean(!is.na(c_across(everything())))) %>%
+#   ungroup()
+# 
+# table(nacount$NAcount)
 
 #Oops missed a few...
 #Fixed, now only one sector per row, just one between 2 and 5 digit
@@ -347,11 +351,242 @@ siccheck.minusagri <- siccheck %>%
   )
   )
 
-#85.7%, still plenty to fill
+#85.7%, still plenty to fill...
+#And done! All UK codes matched against a part of the US codes in the AIOE there
 table(!is.na(siccheck.minusagri$sectorpresentinAIOE)) %>% prop.table
 
-#Search and repace of missing SIC07 sectors
-#Got to "development of building projects"
+
+#Some other basic checks on the AIIE (AI Industry Exposure) measure itself
+#OK, so that's normalised isn't it? Yep, mean 0 SD 1. Coolio.
+plot(density(aieo_industry$AIIE))
+mean(aieo_industry$AIIE)
+sd(aieo_industry$AIIE)
+
+#Will it need renormalising for the UK? Probably.
+#Also possible we could use rank instead.
+
+
+# PROCESS US/UK LINK FILE----
+
+#Add in actual AIIE score
+#Match on name because NAICS is repeated...
+usuk <- usuk %>% 
+  left_join(
+    aieo_industry %>% select(-NAICS),
+    by = c('IndustryTitleFromAIEO' = 'Industry Title')
+  )
+
+#It *probably* makes sense to combine all the SIC levels into one column
+#We can still cascade through from 5 to 2, hopefully in a tidier way
+#And it'll make other operations much neater
+#Having already very carefully checked there's only one entry per row!
+usuk1col <- usuk %>% 
+  rowwise() %>% 
+  mutate(SIC = max(c_across(SIC_2DIGIT_NAME:SIC_5DIGIT_NAME),na.rm = T))
+
+#Pull out SIC code (number of digits gives level)
+usuk1col <- usuk1col %>% 
+  mutate(
+    SICno = str_split(SIC,' : ')[[1]][1],
+    SIClevel = nchar(SICno)
+  ) %>% 
+  select(-c(SIC_2DIGIT_NAME:SIC_5DIGIT_NAME))
+
+#One stage we can do first before use:
+#Find average AIIE where there are multiple SIC2007 codes
+#Easy enough - just apply average to all after grouping
+#Ignoring NAs in SIC2007s
+#In theory...
+
+#Can summarise so each SIC2007 multiple becomes just one
+#We no longer strictly need the NAICS bits but let's keep...
+#Easier to see which NAICS are repeated (though don't need cos AIIE values are unique)
+#But note when single NAICS match to multiple SICS
+#The resulting "max" will be a bit random
+usuk1col.avs <- usuk1col %>% 
+  group_by(SIC) %>% 
+  summarise(
+    AIIE = mean(AIIE),
+    NAICS_4digit = max(NAICS_4digit),
+    IndustryTitleFromAIEO = max(IndustryTitleFromAIEO),
+    Repeat = max(Repeat),
+    SICno = max(SICno),
+    SIClevel = max(SIClevel)
+  ) %>% 
+  ungroup()
+
+
+#What's dist look like now? I have questions about the dist...
+#Has hardly changed...
+plot(density(usuk1col.avs$AIIE))
+mean(usuk1col.avs$AIIE)
+sd(usuk1col.avs$AIIE)
+
+
+# TEST LINK TO CH DATA----
+
+#Get CH data, test on subset
+#Keep geodata to attempt plots later (probaby)
+ch <- readRDS("../companieshouseopen/local/PROCESSED_accountextracts_n_livelist_geocoded_combined_July2025.rds") 
+
+ch_gm <- ch %>% filter(qg('manchester',ITL221NM))
+
+#Drop those SIC codes, they only apply to the first SIC entry
+ch_gm <- ch_gm %>% select(-c(SIC_5DIGIT_CODE:SIC_SECTION_NAME))
+
+#Remind me of SIC code proportions for each...
+numsectorsdefined <- ch_gm %>%
+  rowwise() %>%
+    mutate(NAcount = mean(!is.na(c_across(SICCode.SicText_1:SICCode.SicText_4)))) %>%
+    ungroup()
+
+#I found a muuuuch faster way of doing this somewhere.
+#Can't remember where, darnit.
+table(numsectorsdefined$NAcount) %>% prop.table() * 100
+
+#So thats:
+#82.5% with just one code - so 17.4% with more than one code, which is a decent chunk
+#10.64% with two
+#3.92% with three
+#2.86% with four
+
+#Can come back to what else that correlates with e.g. in terms of firm size. which sectors tend to be assoc'd
+#For now, just want code that attaches AIIE score to that
+
+
+#Plan to test:
+# For each CH firm, attach an AIIE score.
+# Try each SIC level in turn from 5 to 2, use most granular match available.
+# (That’s probably going to be easiest to apply e.g. to all using 5 digits, then all using 4 digits etc)
+# Repeating for firms using more than 1 SIC code in their description, so there’s one AIIE score per SIC, up to a max of 4.
+# Average that score per firm (if only 1, is just that one).
+
+#Might be able to do this with joins...
+
+#First, let's extract just the digits
+ch_gm <- ch_gm %>% 
+  mutate(across(SICCode.SicText_1:SICCode.SicText_4,~ str_sub(.,1,5),.names = "fivedig_{.col}"))
+
+#Case_when will work in sequence
+#Test first then function up and apply to each column
+# ch_gm <- ch_gm %>% 
+#   mutate(
+#     AIIE = case_when(
+#       `fivedigSICCode.SicText_1` 
+#     )
+#   )
+
+#Two stages - run through 5 to 2 digit first
+#Then repeat for each of the four SIC columns
+
+#5 digit matches
+ch_gm.x <- ch_gm %>% 
+  left_join(
+    usuk1col.avs %>% select(SICno,AIIE_5dig = AIIE),
+    by = c('fivedig_SICCode.SicText_1' = 'SICno')
+  )
+
+table(!is.na(ch_gm.x$AIIE_5dig)) %>% prop.table() * 100
+
+#4 digit
+ch_gm.x <- ch_gm.x %>% 
+  mutate(Sictext1_sub = str_sub(SICCode.SicText_1,1,4)) %>% 
+  left_join(
+    usuk1col.avs %>% select(SICno,AIIE_4dig = AIIE),
+    by = c('Sictext1_sub' = 'SICno')
+  )
+
+table(!is.na(ch_gm.x$AIIE_4dig)) %>% prop.table() * 100
+
+#3 digit
+ch_gm.x <- ch_gm.x %>% 
+  mutate(Sictext1_sub = str_sub(SICCode.SicText_1,1,3)) %>% 
+  left_join(
+    usuk1col.avs %>% select(SICno,AIIE_3dig = AIIE),
+    by = c('Sictext1_sub' = 'SICno')
+  )
+
+table(!is.na(ch_gm.x$AIIE_3dig)) %>% prop.table() * 100
+
+#2 digit
+ch_gm.x <- ch_gm.x %>% 
+  mutate(Sictext1_sub = str_sub(SICCode.SicText_1,1,2)) %>% 
+  left_join(
+    usuk1col.avs %>% select(SICno,AIIE_2dig = AIIE),
+    by = c('Sictext1_sub' = 'SICno')
+  )
+
+table(!is.na(ch_gm.x$AIIE_2dig)) %>% prop.table() * 100
+
+ch_gm.x <- ch_gm.x %>% select(-Sictext1_sub)
+
+#So - that behaviour makes sense given the way we're doing this.
+#We may get 2 digit match as well as e.g. 4 or 5
+#We want to keep the most granular available match ONLY per firm
+
+#case_when will work in order, taking each item first
+#Shouldn't have any remaining NAs but let's see
+ch_gm.x <- ch_gm.x %>% 
+  mutate(AIIE = case_when(
+    !is.na(AIIE_5dig) ~ AIIE_5dig,
+    !is.na(AIIE_4dig) ~ AIIE_4dig,
+    !is.na(AIIE_3dig) ~ AIIE_3dig,
+    !is.na(AIIE_2dig) ~ AIIE_2dig,
+    .default = NA
+  ))
+
+table(!is.na(ch_gm.x$AIIE)) %>% prop.table()
+
+#Any remaining are sectors we can't use anyway I think... Yep
+table(ch_gm.x$fivedig_SICCode.SicText_1[is.na(ch_gm.x$AIIE)])
+
+# debugonce(addAIIE)
+# x <- addAIIE(
+#   ch_gm.x %>% select(-c(AIIE_5dig:AIIE_2dig)),
+#   fivedig_SICCode.SicText_2
+#   )
+
+
+#Do from scratch starting at one
+ch_gm_aiie <- addAIIE(ch_gm,fivedig_SICCode.SicText_1)
+ch_gm_aiie <- addAIIE(ch_gm_aiie %>% rename(AIIE1 = AIIE),fivedig_SICCode.SicText_2)
+ch_gm_aiie <- addAIIE(ch_gm_aiie %>% rename(AIIE2 = AIIE),fivedig_SICCode.SicText_3)
+ch_gm_aiie <- addAIIE(ch_gm_aiie %>% rename(AIIE3 = AIIE),fivedig_SICCode.SicText_4)
+ch_gm_aiie <- ch_gm_aiie %>% rename(AIIE4 = AIIE)
+
+
+#And then we just take an average...
+#Which will mostly just return the value of the first SIC match's AIIE
+ch_gm_aiie<- ch_gm_aiie %>% 
+  rowwise() %>% 
+  mutate(AIIEfinal = mean(c_across( starts_with('AIIE') ) ,na.rm=T)) 
+
+#Keep only those with values
+ch_gm_aiie <- ch_gm_aiie %>% 
+  filter(!is.nan(AIIEfinal))
+
+
+#OK. Now we can do something like make a map. Let's just save that though
+saveRDS(ch_gm_aiie,'local/data/ch_gm_aiie_draft1.rds')
+
+
+
+# EXAMINE AIIE NUMBERS FOR GM----
+
+#Options - can weight by jobs...
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
