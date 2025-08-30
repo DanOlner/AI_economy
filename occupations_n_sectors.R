@@ -2,6 +2,7 @@
 library(tidyverse)
 library(nomisr)
 library(sf)
+library(tmap)
 source('functions/helpers.R')
 source('functions/ad_hoc_functions.R')
 
@@ -575,8 +576,75 @@ saveRDS(ch_gm_aiie,'local/data/ch_gm_aiie_draft1.rds')
 
 #Options - can weight by jobs...
 
+#Taken from here
+#https://github.com/DanOlner/companieshouseopen/blob/e6dfcd2eef5a2fb142f5fffc05394645daf9b4d4/testcode/initial_datadigging.R#L123C1-L150C113 
+sq = st_make_grid(ch_gm_aiie, cellsize = 1000, square = F)
+
+#Turn into sf object so gridsquares can have IDs to group by
+sq <- sq %>% st_sf() %>% mutate(id = 1:nrow(.))
+
+# plot(sq)
+
+#Intersection...
+overlay <- st_intersection(ch_gm_aiie,sq)
 
 
+#This no longer needs to be geo, which will speed up
+#Can link back to grids once done
+
+#Let's find an average AIIE weighted by employee number in each grid square
+section.summary <- overlay %>% 
+  st_set_geometry(NULL) %>% 
+  filter(Employees_thisyear > 0) %>% #Only firms with employees recorded in latest year
+  group_by(id) %>% 
+  summarise(
+    AIIE_weightedbyemployees = weighted.mean(AIIEfinal,Employees_thisyear),
+    totalemployees = sum(Employees_thisyear)
+    ) %>% 
+  group_by(id) %>%
+  filter(sum(totalemployees) >= 10)#keep only gridsquares where total employee count is more than / equal to 100
+  ungroup()
+  
+#Link that back into the grid squares...
+#Use right join to drop empties
+sq.aiie <- sq %>% 
+  right_join(
+    section.summary,
+    by = 'id'
+  )
+  
+itl2 <- st_read('../RegionalEcons_web/data/ITL_geographies/International_Territorial_Level_2_January_2021_UK_BFE_V2_2022_-4735199360818908762/ITL2_JAN_2021_UK_BFE_V2.shp') %>% st_simplify(preserveTopology = T, dTolerance = 100) %>% 
+  filter(qg('manchester',ITL221NM))
+
+  
+lad <- st_read("~/Dropbox/MapPolygons/UK/2024/Local_Authority_Districts_May_2024_Boundaries_UK_BFC/LAD_MAY_2024_UK_BFC.shp") %>% st_simplify(preserveTopology = T, dTolerance = 100)
+  
+#https://stackoverflow.com/a/33144808/5023561
+#Make different pastel-ish colours
+# n <- length(unique(sq.aiie$modal_sector))
+# set.seed(101)
+# qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+# col_vector = unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))
+# pie(rep(1,n), col=sample(col_vector, n))
+
+tmap_mode('view')
+
+tm_shape(
+  sq.aiie
+  # sq.aiie %>% mutate(combined_label = paste0(ITL221NM,', ',modal_sector))
+) +
+  tm_polygons('AIIE_weightedbyemployees', fill.scale = tm_scale_continuous(values = "matplotlib.rd_yl_bu"), 
+              id="AIIE_weightedbyemployees", col_alpha = 0, fill_alpha = 0.65) +
+  # tm_view(set.view = c(7, 51, 4)) +
+  tm_shape(lad) +
+  tm_borders(col = 'black', lwd = 1, fill_alpha = 0.3) +
+  tm_shape(itl2) +
+  tm_borders(col = 'black', lwd = 4) +
+  tm_view(set_view = c(-2.2,53.49326048352635,11))#centred on Bradford
+# tm_view(set_view = c(-1.598452,52.740283,8))
+# tm_view(bbox = "England")
+  
+  
 
 
 
