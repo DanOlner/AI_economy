@@ -1,0 +1,235 @@
+---
+title: "GM AI misc plots"
+author:
+  - name: "Dan Olner"
+format: 
+  html:
+    output-file: "GM AI misc plots"
+    fig-width: 8
+    fig-height: 8
+execute:
+  echo: false
+  message: false
+  warning: false
+fig-responsive: false
+collapse: false
+---
+
+```{r setup}
+library(tidyverse)
+library(nomisr)
+library(sf)
+library(tmap)
+library(ggridges)
+source('../../functions/helpers.R')
+source('../../functions/ad_hoc_functions.R')
+
+options(scipen = 999)
+
+#Set ggplot theme
+theme_set(theme_light())
+
+#Get AIOE lookup
+soc_3dig_AIOE <- readRDS('../../data/UK_SOC_3digit_linkedAIOE.rds')
+
+
+```
+
+[Link to](https://danolner.github.io/AI_economy/maps/GM_AI_FeltenAIIE_avweightedbyemployees_CompaniesHouse.html){target="_blank"} GM Companies House AI Industry Exposure hexmap (opens in new tab).
+
+## UK MSOAs linked to Felten et al AI Occupational Exposure (AIOE): Greater Manchester local authorities + core cities
+
+Using Census 2021 Occupation data. MSOAs in each local authority have a wide range of average AIOE.
+
+```{r}
+#| fig-height: 9
+
+
+#Via bulk download
+#Workplace counts at MSOA first
+#105 categories of SOC2020, so that's 
+#3 digit "minor group"
+#https://www.hesa.ac.uk/collection/coding-manual-tools/sicsocdata/soc-2020
+occ.msoa <- read_csv("../../local/data/wp016/WP016_msoa.csv")
+# occ.msoa <- read_csv("local/data/wp016/WP016_msoa.csv")
+
+#Some tweaks to MSOA occupation counts census data
+occ.msoa <- occ.msoa %>% 
+  filter(!qg("does not apply",`Occupation (current) (105 categories) Label`)) %>% 
+  mutate(
+    occupation_name = str_sub(`Occupation (current) (105 categories) Label`,5,-1),
+    occupation_code = str_sub(`Occupation (current) (105 categories) Label`,1,3)
+  ) %>% 
+  select(-c(`Occupation (current) (105 categories) Code`,`Occupation (current) (105 categories) Label`))
+
+
+#Add AIOE into the MSOA data
+occ.msoa.aioe <- occ.msoa %>% 
+  rename(
+    msoacode = `Middle layer Super Output Areas Code`,
+    msoalabel = `Middle layer Super Output Areas Label`
+    ) %>% 
+  left_join(
+    soc_3dig_AIOE %>% select(-SOC20203dig_name),
+    by = c('occupation_code' = 'SOC20203dig_code')
+  )
+
+
+
+#From https://github.com/DanOlner/RegionalEconomicTools/blob/46907c9eb05193fe790579f73ff5f1ff019d90f5/quarto_docs/Bradford_sectorclusters.qmd#L384C1-L411C53
+#England and Wales only here
+corecities <- getdistinct('sheffield|Belfast|Birmingham|Bristol|Cardiff|Glasgow|Leeds|Liverpool|Manchester|Tyne|Nottingham', unique(str_sub(occ.msoa.aioe$msoalabel,1,-5)))
+
+#Yes, all in there, need to remove a few...
+corecities <- corecities[!grepl(x = corecities, pattern = 'Greater|shire|side', ignore.case = T)]
+corecities <- corecities[order(corecities)]
+
+gmlas <- readRDS('../../data/gmlas.rds')
+# gmlas <- readRDS('data/gmlas.rds')
+
+
+#Per MSOA weighted means and labels
+msoa.aioe.avs <- occ.msoa.aioe %>% 
+  group_by(msoacode,msoalabel) %>% 
+  summarise(
+    AIOE_weightedmean = weighted.mean(AIOE,Count),
+    sd_AIOE = sqrt(Hmisc::wtd.var(AIOE,Count))
+  ) %>% 
+  mutate(
+    laname = str_sub(msoalabel,1,-5),
+    type = case_when(
+      laname %in% gmlas ~ "GM LA",
+      laname %in% corecities[!qg('manc',corecities)] ~ "core city (minus manc)",
+      .default = "other"
+    ),
+    is_GM = laname %in% gmlas
+  )
+
+
+
+#Plot individual MSOA values for each LA
+ggplot(msoa.aioe.avs %>% filter(type != 'other'), 
+       aes(
+         x = AIOE_weightedmean, 
+         y = fct_reorder(laname,AIOE_weightedmean), 
+         colour = type, 
+         size = is_GM)) +
+  geom_jitter(height = 0.1) +
+  # geom_errorbar(aes(xmin = xmin, xmax = xmax), width = 0.1) +
+  scale_size_manual(values = c(0.5,1)) +
+  # scale_colour_manual(values = c('blue','green','black')) +
+  scale_color_brewer(palette = 'Dark2') +
+  geom_vline(xintercept = 0, colour = 'black', alpha = 0.5) +
+  xlab('AIOE') +
+  ylab('') +
+  guides(size = F) +
+  theme(legend.title=element_blank())
+
+
+
+
+```
+
+
+## Occupation exposure linked to Census 2021 at local authority level (showing range of occupational exposure, bars are 1 SD)
+
+Both AI exposure measures from Felten et al are normalised (0 mean 1 SD) and that translates to the UK link. So this is showing that - at broad local authority level - the overall differences due to industry mix are not massive (the same shows up in the Companies House data). **Below** LA level, stronger differences show up.
+
+
+```{r}
+#| fig-height: 9
+
+#Upper tier
+occ.la <- read_csv("../../local/data/wp016/WP016_utla.csv")
+# occ.la <- read_csv("local/data/wp016/WP016_utla.csv")
+
+#Some tweaks to local authority occupation counts census data
+occ.la <- occ.la %>% 
+  filter(!qg("does not apply",`Occupation (current) (105 categories) Label`)) %>% 
+  mutate(
+    occupation_name = str_sub(`Occupation (current) (105 categories) Label`,5,-1),
+    occupation_code = str_sub(`Occupation (current) (105 categories) Label`,1,3)
+  ) %>% 
+  select(-c(`Occupation (current) (105 categories) Code`,`Occupation (current) (105 categories) Label`))
+
+
+#Add AIOE into the Census data
+occ.la.aioe <- occ.la %>% 
+  left_join(
+    soc_3dig_AIOE %>% select(-SOC20203dig_name),
+    by = c('occupation_code' = 'SOC20203dig_code')
+  )
+
+#Check per LA means
+la.aioe.avs <- occ.la.aioe %>% 
+  group_by(`Upper tier local authorities Label`) %>% 
+  summarise(
+    AIOE_weightedmean = weighted.mean(AIOE,Count),
+    sd_AIOE = sqrt(Hmisc::wtd.var(AIOE,Count))
+    )
+
+la.aioe.avs <- la.aioe.avs %>%
+  rename(laname = `Upper tier local authorities Label`) %>% 
+  mutate(type = case_when(
+    laname %in% gmlas ~ "GM LA",
+    laname %in% corecities[!qg('manc',corecities)] ~ "core city (minus manc)",
+    .default = "other"
+  ),
+  is_GM = laname %in% gmlas,
+  xmin = AIOE_weightedmean - (sd_AIOE),
+  xmax = AIOE_weightedmean + (sd_AIOE)
+  )
+
+
+ggplot(la.aioe.avs %>% filter(type != 'other'), 
+       aes(
+         x = AIOE_weightedmean, 
+         y = fct_reorder(laname,AIOE_weightedmean), 
+         colour = type, 
+         size = is_GM)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(xmin = xmin, xmax = xmax), width = 0.1) +
+  scale_size_manual(values = c(0.5,1)) +
+  # scale_colour_manual(values = c('blue','green','black')) +
+  scale_color_brewer(palette = 'Dark2') +
+  geom_vline(xintercept = 0, colour = 'black', alpha = 0.5) +
+  xlab('AIOE') +
+  ylab('') +
+  guides(size = F) +
+  theme(legend.title=element_blank())
+
+
+
+```
+
+
+
+
+## Companies house AIIE by employee similarly spread
+
+Density of AI Industry Exposure for indidivual employees in Companies House data for GM local authorities. Similar patterns but different points for peaks in different places (e.g. Manchester AIIE high values are higher peaks).
+
+```{r}
+
+gm_byemployee <- readRDS('../../local/data/gm_ch_byemployee.rds')
+
+#https://cran.r-project.org/web/packages/ggridges/vignettes/gallery.html
+ggplot(gm_byemployee, 
+       aes(x = AIIEfinal, y = fct_reorder(localauthority_name,AIIEfinal), group = fct_reorder(localauthority_name,AIIEfinal))) +
+  geom_density_ridges(scale = 1.5, linewidth = 0.25, rel_min_height = 0.03, alpha = 1) +
+  theme_ridges() +
+  # scale_x_continuous(limits = c(1, 200), expand = c(0, 0)) +
+  # scale_y_reverse(
+  #   breaks = c(2000, 1980, 1960, 1940, 1920, 1900),
+  #   expand = c(0, 0)
+  xlab('AIIE') +
+  ylab('') +
+  coord_cartesian(clip = "off")
+
+
+
+
+```
+
+
+

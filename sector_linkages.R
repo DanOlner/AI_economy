@@ -1,25 +1,11 @@
-#Exploring occupation options
+#Exploring sector links
 library(tidyverse)
 library(nomisr)
 library(sf)
 library(tmap)
+library(ggridges)
 source('functions/helpers.R')
 source('functions/ad_hoc_functions.R')
-
-# CENSUS 2021 OCCUPATIONS----
-
-#Via bulk download
-#Workplace counts at MSOA first
-#105 categories of SOC2020, so that's 
-#3 digit "minor group"
-#https://www.hesa.ac.uk/collection/coding-manual-tools/sicsocdata/soc-2020
-occ.msoa <- read_csv("local/data/wp016/WP016_msoa.csv")
-
-#Do we have even more cats at LA level? Nope, still 105
-occ.la <- read_csv("local/data/wp016/WP016_utla.csv")
-
-
-
 
 # SIC codes----
 
@@ -281,6 +267,8 @@ siclookup2 %>%
   distinct() %>% 
   View
 
+#save copy
+write_csv(siclookup2,'data/siclookup_allcodes.csv')
 
 
 
@@ -422,6 +410,12 @@ usuk1col.avs <- usuk1col %>%
 plot(density(usuk1col.avs$AIIE))
 mean(usuk1col.avs$AIIE)
 sd(usuk1col.avs$AIIE)
+
+#How many SICs do we have here...? 216
+unique(usuk1col.avs$SIC)
+#But several have same AIIE code...
+length(unique(usuk1col.avs$NAICS_4digit))
+
 
 
 # TEST LINK TO CH DATA----
@@ -572,6 +566,49 @@ saveRDS(ch_gm_aiie,'local/data/ch_gm_aiie_draft1.rds')
 
 
 
+# REPEAT FOR ALL CH DATA FOR GB----
+
+#Let' see if runs OK for all of it...
+#Get 5dig codes to match on
+ch <- ch %>%
+  mutate(across(SICCode.SicText_1:SICCode.SicText_4,~ str_sub(.,1,5),.names = "fivedig_{.col}"))
+
+#how long? 35 seconds, that's alright
+# x <- proc.time()
+# ch_all_aiie <- addAIIE(ch,fivedig_SICCode.SicText_1)
+# proc.time() - x
+
+ch_all_aiie <- addAIIE(ch,fivedig_SICCode.SicText_1)
+ch_all_aiie <- addAIIE(ch_all_aiie %>% rename(AIIE1 = AIIE),fivedig_SICCode.SicText_2)
+ch_all_aiie <- addAIIE(ch_all_aiie %>% rename(AIIE2 = AIIE),fivedig_SICCode.SicText_3)
+ch_all_aiie <- addAIIE(ch_all_aiie %>% rename(AIIE3 = AIIE),fivedig_SICCode.SicText_4)
+ch_all_aiie <- ch_all_aiie %>% rename(AIIE4 = AIIE)
+
+
+#And then we just take an average...
+#Which will mostly just return the value of the first SIC match's AIIE
+# ch_all_aiie<- ch_all_aiie %>% 
+#   rowwise() %>% 
+#   mutate(AIIEfinal = mean(c_across( starts_with('AIIE') ) ,na.rm=T)) 
+
+#Let's try some faster options... yep, instant!
+rowmeanz <- rowMeans(ch_all_aiie %>% st_set_geometry(NULL) %>% select(AIIE1:AIIE4), na.rm = T)
+#Add back in
+ch_all_aiie<- ch_all_aiie %>% 
+  mutate(AIIEfinal = rowmeanz)
+
+#Keep only those with values
+ch_all_aiie <- ch_all_aiie %>% 
+  filter(!is.nan(AIIEfinal))
+
+
+#OK. Now we can do something like make a map. Let's just save that though
+saveRDS(ch_all_aiie,'local/data/ch_all_aiie_draft1.rds')
+
+
+
+
+
 # EXAMINE AIIE NUMBERS FOR GM----
 
 #First, let's sanity check the AIIE values
@@ -661,14 +698,135 @@ tm_shape(
 # tm_view(set_view = c(-1.598452,52.740283,8))
 # tm_view(bbox = "England")
   
-  
 
 
 
+# Look at all CH data with AIIE / put GM in context----
+
+#Couple of things we can do here
+#Av / spread of AIIE values for LAs including GM LAs (plus GM as a whole) compared to rest of GB
+
+#We've got all GM LAs here already...
+gmlas <- unique(ch_all_aiie$localauthority_name[qg('manchester',ch_all_aiie$ITL221NM)])
+
+#Save for elsewhere!
+saveRDS(gmlas,'data/gmlas.rds')
+
+#Can also find weighted avs for two timepoints, though it'll be fewer datapoints
+
+#For most recent year
+
+#From https://github.com/DanOlner/RegionalEconomicTools/blob/46907c9eb05193fe790579f73ff5f1ff019d90f5/quarto_docs/Bradford_sectorclusters.qmd#L384C1-L411C53
+#Get list of corecities
+corecities <- getdistinct('sheffield|Belfast|Birmingham|Bristol|Cardiff|Glasgow|Leeds|Liverpool|Manchester|Tyne|Nottingham', unique(ch_all_aiie$localauthority_name))
+
+#Yes, all in there, need to remove a few...
+corecities <- corecities[!grepl(x = corecities, pattern = 'Greater|shire|side', ignore.case = T)]
+corecities <- corecities[order(corecities)]
+
+#Check match also works in hours worked... tick
+# table(corecities %in% hoursworked$Region_name)
 
 
 
+#Find LA level summaries...
+#Hmisc can do weighted variance
+LAsummary <- ch_all_aiie %>% 
+  st_set_geometry(NULL) %>% 
+  filter(Employees_thisyear > 0) %>% #Only firms with employees recorded in latest year
+  group_by(localauthority_name) %>% 
+  summarise(
+    AIIE_weightedbyemployees = weighted.mean(AIIEfinal,Employees_thisyear),
+    AIIE_SD_weightedbyemployees = sqrt(Hmisc::wtd.var(AIIEfinal,Employees_thisyear)),
+    totalemployees = sum(Employees_thisyear)
+  ) %>% ungroup()
 
+
+#Label core and GM LAs
+LAsummary <- LAsummary %>% 
+  mutate(type = case_when(
+    localauthority_name %in% gmlas ~ "GM LA",
+    localauthority_name %in% corecities[!qg('manc',corecities)] ~ "core city (minus manc)",
+    .default = "other"
+  ),
+  is_GM = localauthority_name %in% gmlas,
+  xmin = AIIE_weightedbyemployees - (AIIE_SD_weightedbyemployees),
+  xmax = AIIE_weightedbyemployees + (AIIE_SD_weightedbyemployees)
+  # xmin = AIIE_weightedbyemployees - (AIIE_SD_weightedbyemployees * 1.64),
+  # xmax = AIIE_weightedbyemployees + (AIIE_SD_weightedbyemployees * 1.64)
+  # xmin = AIIE_weightedbyemployees - (AIIE_SD_weightedbyemployees * 1.96),
+  # xmax = AIIE_weightedbyemployees + (AIIE_SD_weightedbyemployees * 1.96)
+  )
+
+
+#OK, what we got? Let's look at all / stick SDs on
+ggplot(LAsummary %>% filter(type != 'other'), 
+       aes(
+         x = AIIE_weightedbyemployees, 
+         y = fct_reorder(localauthority_name,AIIE_weightedbyemployees), 
+         colour = type, 
+         size = is_GM)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(xmin = xmin, xmax = xmax), width = 0.1) +
+  scale_size_manual(values = c(0.5,1)) +
+  # scale_colour_manual(values = c('blue','green','black')) +
+  scale_color_brewer(palette = 'Dark2') +
+  geom_vline(xintercept = 0, colour = 'black', alpha = 0.5) +
+  xlab(' -- ')
+
+
+#Hmm
+plot(density(
+  ch_all_aiie$AIIEfinal[qg('manchester',ch_all_aiie$localauthority_name)]
+))
+
+plot(density(
+  ch_all_aiie$AIIEfinal[qg('salford',ch_all_aiie$localauthority_name)]
+))
+
+plot(density(
+  ch_all_aiie$AIIEfinal[qg('wigan',ch_all_aiie$localauthority_name)]
+))
+
+
+#We want to weight that by employees, so get one row per employee?
+gm_byemployee <- ch_all_aiie %>% 
+  st_set_geometry(NULL) %>% 
+  filter(
+    Employees_thisyear > 0,
+    qg('manchester',ITL221NM)#Get all GM
+    ) %>% 
+  select(AIIEfinal,Employees_thisyear,localauthority_name) %>% 
+  uncount(Employees_thisyear)
+
+
+#And can now get better density plots
+plot(density(
+  gm_byemployee$AIIEfinal[qg('manchester',gm_byemployee$localauthority_name)]
+))
+
+plot(density(
+  gm_byemployee$AIIEfinal[qg('salford',gm_byemployee$localauthority_name)]
+))
+
+plot(density(
+  gm_byemployee$AIIEfinal[qg('wigan',gm_byemployee$localauthority_name)]
+))
+
+
+saveRDS(gm_byemployee,'local/data/gm_ch_byemployee.rds')
+
+
+#https://cran.r-project.org/web/packages/ggridges/vignettes/gallery.html
+ggplot(gm_byemployee, 
+       aes(x = AIIEfinal, y = fct_reorder(localauthority_name,AIIEfinal), group = fct_reorder(localauthority_name,AIIEfinal))) +
+  geom_density_ridges(scale = 1.5, linewidth = 0.25, rel_min_height = 0.03, alpha = 1) +
+  theme_ridges() +
+  # scale_x_continuous(limits = c(1, 200), expand = c(0, 0)) +
+  # scale_y_reverse(
+  #   breaks = c(2000, 1980, 1960, 1940, 1920, 1900),
+  #   expand = c(0, 0)
+  coord_cartesian(clip = "off")
 
 
 
