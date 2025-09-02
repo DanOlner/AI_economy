@@ -4,7 +4,7 @@ author:
   - name: "Dan Olner"
 format: 
   html:
-    output-file: "GM AI misc plots"
+    output-file: "GM_AI_miscplots"
     fig-width: 8
     fig-height: 8
 execute:
