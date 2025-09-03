@@ -611,6 +611,8 @@ saveRDS(ch_all_aiie,'local/data/ch_all_aiie_draft1.rds')
 
 # EXAMINE AIIE NUMBERS FOR GM----
 
+ch_gm_aiie <- readRDS('local/data/ch_gm_aiie_draft1.rds')
+
 #First, let's sanity check the AIIE values
 #Above the mean is more exposed, below is less
 #Check on sectors...
@@ -649,14 +651,17 @@ overlay <- st_intersection(ch_gm_aiie,sq)
 #Let's find an average AIIE weighted by employee number in each grid square
 section.summary <- overlay %>% 
   st_set_geometry(NULL) %>% 
-  filter(Employees_thisyear > 0) %>% #Only firms with employees recorded in latest year
+  # filter(Employees_thisyear > 0) %>% #Only firms with employees recorded in latest year
+  filter(between(Employees_thisyear,1,9)) %>% #Microfirms
   group_by(id) %>% 
   summarise(
     AIIE_weightedbyemployees = weighted.mean(AIIEfinal,Employees_thisyear),
-    totalemployees = sum(Employees_thisyear)
+    totalemployees = sum(Employees_thisyear),
+    totalfirms = n(),
+    la = max(localauthority_name)
     ) %>% 
   group_by(id) %>%
-  filter(sum(totalemployees) >= 10)#keep only gridsquares where total employee count is more than / equal to 100
+  filter(sum(totalemployees) >= 10) %>% #keep only gridsquares where total employee count is more than / equal to 100
   ungroup()
   
 #Link that back into the grid squares...
@@ -681,6 +686,10 @@ lad <- st_read("~/Dropbox/MapPolygons/UK/2024/Local_Authority_Districts_May_2024
 # col_vector = unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))
 # pie(rep(1,n), col=sample(col_vector, n))
 
+#Add in hover text
+sq.aiie <- sq.aiie %>% 
+  mutate(hovertext = paste0(la,", AIIE: ", round(AIIE_weightedbyemployees,2)," Firm count: ",totalfirms, ", id: ",id))
+
 tmap_mode('view')
 
 tm_shape(
@@ -688,7 +697,7 @@ tm_shape(
   # sq.aiie %>% mutate(combined_label = paste0(ITL221NM,', ',modal_sector))
 ) +
   tm_polygons('AIIE_weightedbyemployees', fill.scale = tm_scale_continuous(values = "matplotlib.rd_yl_bu"), 
-              id="AIIE_weightedbyemployees", col_alpha = 0, fill_alpha = 0.65) +
+              id="hovertext", col_alpha = 0, fill_alpha = 0.65) +
   # tm_view(set.view = c(7, 51, 4)) +
   tm_shape(lad) +
   tm_borders(col = 'black', lwd = 1, fill_alpha = 0.3) +
@@ -699,6 +708,41 @@ tm_shape(
 # tm_view(bbox = "England")
   
 
+#Looking at some of those
+overlay %>% filter(id == 1106,between(Employees_thisyear,1,9)) %>% View
+#This one has 806 firms, seems a lot!
+overlay %>% filter(id == 1129, between(Employees_thisyear,1,9)) %>% View
+
+#How many unique addresses there? Is that a lot of firms regd at accountant address?
+#Aye - 276 unique addresses for 806 firms!
+overlay %>% filter(id == 1129, between(Employees_thisyear,1,9)) %>% 
+  select(RegAddress.AddressLine1) %>% 
+  distinct() %>% 
+  nrow()
+
+#Digging a bit more. Most common addresses?
+mostc <- overlay %>% filter(id == 1129, between(Employees_thisyear,1,9)) %>%
+  st_set_geometry(NULL) %>% 
+  group_by(RegAddress.AddressLine1) %>% 
+  summarise(numadress = n()) %>% 
+  arrange(-numadress)
+
+#Let's see if we can find something useful about one of them
+#GROSVENOR HOUSE 45 THE DOWNS WA14 2QG
+gros <- overlay %>% 
+  st_set_geometry(NULL) %>% 
+  filter(RegAddress.AddressLine1 == 'GROSVENOR HOUSE', RegAddress.PostCode == 'WA14 2QG') %>% 
+  arrange(-Employees_thisyear)
+
+
+overlay %>% filter(id == 1129, between(Employees_thisyear,1,9)) %>% 
+  st_set_geometry(NULL) %>% 
+  group_by(SIC_SECTION_NAME) %>% 
+  summarise(
+    avAIIE = weighted.mean(AIIEfinal,Employees_thisyear),
+    employees = sum(Employees_thisyear),
+    firmcount = n()
+    )
 
 
 # Look at all CH data with AIIE / put GM in context----
@@ -829,8 +873,234 @@ ggplot(gm_byemployee,
   coord_cartesian(clip = "off")
 
 
+# INTERSECT CH DATA WITH MSOAS TO COMPARE TO CENSUS 2021 OCCUPATION DATA----
+
+msoa.geo <- st_read('../../../MapPolygons/EnglandWalesMerged/Middle_layer_Super_Output_Areas_December_2021_Boundaries_EW_BGC_V3_-3870998653275641389.geojson') %>% 
+  select(MSOA21CD)
+  # select(MSOA21CD,MSOA21NM) %>% 
+  # mutate(laname = str_sub(MSOA21NM,1,-5))
+
+#52 seconds
+x <- proc.time()
+ch_msoaoverlay <- st_intersection(
+  ch_all_aiie %>% select(CompanyName,CompanyNumber,SICCode.SicText_1:SICCode.SicText_4,localauthority_code:ITL221NM,accountcode,dormantstatus,Employees_thisyear,Employees_lastyear,SIC_5DIGIT_CODE:age_of_firm_years,AIIEfinal),
+  msoa.geo)
+proc.time() - x
+
+#1.61GB
+# pryr::object_size(ch_msoaoverlay)
+
+#Summarise by MSOA, no geom
+msoa_summary <- ch_msoaoverlay %>% 
+  st_set_geometry(NULL) %>% 
+  filter(Employees_thisyear > 0) %>% #Only firms with employees recorded in latest year
+  group_by(MSOA21CD) %>% 
+  summarise(
+    localauthority_name = max(localauthority_name),
+    AIIE_weightedbyemployees = weighted.mean(AIIEfinal,Employees_thisyear),
+    AIIE_SD_weightedbyemployees = sqrt(Hmisc::wtd.var(AIIEfinal,Employees_thisyear)),
+    totalemployees = sum(Employees_thisyear),
+    totalfirms = n()
+  ) %>% ungroup()
+
+#Add in place flags
+msoa_summary <- msoa_summary %>% 
+  mutate(type = case_when(
+    localauthority_name %in% gmlas ~ "GM LA",
+    localauthority_name %in% corecities[!qg('manc',corecities)] ~ "core city (minus manc)",
+    .default = "other"
+  ),
+  is_GM = localauthority_name %in% gmlas
+  )
+  
+
+#Do same plot as for msoa occupations...
+#From here:
+#https://github.com/DanOlner/AI_economy/blob/2555a8a4d112d5635214e89ea51ddd87a7db90c9/occupation_linkages.R#L282
+ggplot(msoa_summary %>% filter(type != 'other'), 
+       aes(
+         x = AIIE_weightedbyemployees, 
+         y = fct_reorder(localauthority_name,AIIE_weightedbyemployees), 
+         colour = type, 
+         size = is_GM)) +
+  geom_jitter(height = 0.1) +
+  # geom_errorbar(aes(xmin = xmin, xmax = xmax), width = 0.1) +
+  scale_size_manual(values = c(0.5,1)) +
+  # scale_colour_manual(values = c('blue','green','black')) +
+  scale_color_brewer(palette = 'Dark2') +
+  geom_vline(xintercept = 0, colour = 'black', alpha = 0.5) +
+  xlab('AIIE') +
+  ylab('') +
+  guides(size = F) +
+  theme(legend.title=element_blank())
 
 
+
+#Let's also make two versions - micro firms and others - 
+#And compeare them on the same plot to see if the distribution of AIIE is radically different
+msoa_micro <- ch_msoaoverlay %>% 
+  st_set_geometry(NULL) %>% 
+  filter(Employees_thisyear > 0 & Employees_thisyear < 4) %>% #Only firms with employees recorded in latest year
+  # filter(Employees_thisyear > 0 & Employees_thisyear < 10) %>% #Only firms with employees recorded in latest year
+  group_by(MSOA21CD) %>% 
+  summarise(
+    localauthority_name = max(localauthority_name),
+    AIIE_weightedbyemployees = weighted.mean(AIIEfinal,Employees_thisyear),
+    AIIE_SD_weightedbyemployees = sqrt(Hmisc::wtd.var(AIIEfinal,Employees_thisyear)),
+    totalemployees = sum(Employees_thisyear),
+    totalfirms = n()
+  ) %>% ungroup() %>% 
+  mutate(firmsize = '1-3')
+  # mutate(firmsize = 'micro')
+
+msoa_therest <- ch_msoaoverlay %>% 
+  st_set_geometry(NULL) %>% 
+  filter(between(Employees_thisyear,4,9)) %>% #Only firms with employees recorded in latest year
+  # filter(Employees_thisyear > 9) %>% #Only firms with employees recorded in latest year
+  group_by(MSOA21CD) %>% 
+  summarise(
+    localauthority_name = max(localauthority_name),
+    AIIE_weightedbyemployees = weighted.mean(AIIEfinal,Employees_thisyear),
+    AIIE_SD_weightedbyemployees = sqrt(Hmisc::wtd.var(AIIEfinal,Employees_thisyear)),
+    totalemployees = sum(Employees_thisyear),
+    totalfirms = n()
+  ) %>% ungroup() %>% 
+  mutate(firmsize = '4-9')
+  # mutate(firmsize = 'other')
+
+
+#Sticking another one in!
+msoa_somemore <- ch_msoaoverlay %>% 
+  st_set_geometry(NULL) %>% 
+  filter(Employees_thisyear > 9) %>% #Only firms with employees recorded in latest year
+  # filter(Employees_thisyear > 9) %>% #Only firms with employees recorded in latest year
+  group_by(MSOA21CD) %>% 
+  summarise(
+    localauthority_name = max(localauthority_name),
+    AIIE_weightedbyemployees = weighted.mean(AIIEfinal,Employees_thisyear),
+    AIIE_SD_weightedbyemployees = sqrt(Hmisc::wtd.var(AIIEfinal,Employees_thisyear)),
+    totalemployees = sum(Employees_thisyear),
+    totalfirms = n()
+  ) %>% ungroup() %>% 
+  mutate(firmsize = '9+')
+
+msoa_both <- bind_rows(msoa_micro,msoa_therest,msoa_somemore)
+
+#Add places labels
+msoa_both <- msoa_both %>% 
+  mutate(type = case_when(
+    localauthority_name %in% gmlas ~ "GM LA",
+    localauthority_name %in% corecities[!qg('manc',corecities)] ~ "core city",
+    .default = "other"
+  ),
+  is_GM = localauthority_name %in% gmlas
+  ) 
+# %>% 
+  # mutate(firmsize = factor(firmsize, levels = c('1-3','9+','4-9')))
+
+#Then put em dodged on same line
+#In other situations, have to do this with two overlaid plots... let's see
+ggplot(msoa_both %>% filter(type != 'other'), 
+       aes(
+         x = AIIE_weightedbyemployees, 
+         y = fct_reorder(localauthority_name,AIIE_weightedbyemployees), 
+         alpha = type, 
+         size = type,
+         colour = firmsize,
+         shape  = firmsize
+         )) +
+  geom_point(position = position_dodge(width = 0.7)) +
+  scale_size_manual(values = c(1.5,3)) +
+  scale_color_brewer(palette = 'Dark2') +
+  scale_shape_manual(values = c(25,22,24)) +
+  scale_alpha_manual(values = c(0.3,1)) +
+  geom_vline(xintercept = 0, colour = 'black', alpha = 0.5) +
+  xlab('AIIE') +
+  ylab('') +
+  guides(size = F,alpha=F) +
+  theme(legend.title=element_blank())
+
+
+
+
+
+
+#REPEAT THAT FOR THE HEX SQUARES TO LOOK FOR MORE DETAIL
+#For Manc only I think
+hex_micro <- overlay %>% 
+  st_set_geometry(NULL) %>% 
+  filter(Employees_thisyear > 0 & Employees_thisyear < 10) %>% #Microfirms
+  group_by(id) %>% 
+  summarise(
+    AIIE_weightedbyemployees = weighted.mean(AIIEfinal,Employees_thisyear),
+    totalemployees = sum(Employees_thisyear),
+    totalfirms = n(),
+    la = max(localauthority_name)
+  ) %>% 
+  group_by(id) %>%
+  filter(sum(totalemployees) >= 10) %>% #keep only gridsquares where total employee count is more than / equal to 100
+  ungroup() %>% 
+  mutate(firmsize = 'micro')
+
+hex_rest <- overlay %>% 
+  st_set_geometry(NULL) %>% 
+  filter(Employees_thisyear > 9) %>% #Microfirms
+  group_by(id) %>% 
+  summarise(
+    AIIE_weightedbyemployees = weighted.mean(AIIEfinal,Employees_thisyear),
+    totalemployees = sum(Employees_thisyear),
+    totalfirms = n(),
+    la = max(localauthority_name)
+  ) %>% 
+  group_by(id) %>%
+  filter(sum(totalemployees) >= 10) %>% #keep only gridsquares where total employee count is more than / equal to 100
+  ungroup() %>% 
+  mutate(firmsize = 'other')
+
+hex_both <- bind_rows(hex_micro,hex_rest)
+
+ggplot(hex_both, 
+       aes(
+         x = AIIE_weightedbyemployees, 
+         y = fct_reorder(la,AIIE_weightedbyemployees), 
+         colour = firmsize,
+         shape  = firmsize
+       )) +
+  geom_point(position = position_dodge(width = 0.5), size = 3) +
+  scale_color_brewer(palette = 'Dark2') +
+  scale_shape_manual(values = c(25,24)) +
+  geom_vline(xintercept = 0, colour = 'black', alpha = 0.5) +
+  xlab('AIIE') +
+  ylab('') +
+  guides(size = F) +
+  theme(legend.title=element_blank())
+
+
+
+
+
+
+
+
+
+
+
+#Since we now have both (other run in occ script) let's just corr...
+#Each in own col
+both <- msoa_summary %>% 
+  left_join(
+    msoa.aioe.avs %>% select(MSOA21CD = msoacode,AIOE_weightedmean,sd_AIOE),
+    by = 'MSOA21CD'
+  )
+
+ggplot(
+  both %>% filter(is_GM),
+  aes(x = AIIE_weightedbyemployees, y = AIOE_weightedmean)) +
+  geom_point() +
+  # geom_abline(slope = 1, intercept = 0) +
+  # coord_fixed() +
+  facet_wrap(~localauthority_name, nrow = 3, scales = 'free') +
+  geom_smooth(method='lm')
 
 
 
