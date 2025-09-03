@@ -641,6 +641,17 @@ sq <- sq %>% st_sf() %>% mutate(id = 1:nrow(.))
 
 # plot(sq)
 
+
+
+itl2 <- st_read('../RegionalEcons_web/data/ITL_geographies/International_Territorial_Level_2_January_2021_UK_BFE_V2_2022_-4735199360818908762/ITL2_JAN_2021_UK_BFE_V2.shp') %>% st_simplify(preserveTopology = T, dTolerance = 100) %>% 
+  filter(qg('manchester',ITL221NM))
+
+
+lad <- st_read("~/Dropbox/MapPolygons/UK/2024/Local_Authority_Districts_May_2024_Boundaries_UK_BFC/LAD_MAY_2024_UK_BFC.shp") %>% st_simplify(preserveTopology = T, dTolerance = 100)
+
+
+
+
 #Intersection...
 overlay <- st_intersection(ch_gm_aiie,sq)
 
@@ -652,7 +663,8 @@ overlay <- st_intersection(ch_gm_aiie,sq)
 section.summary <- overlay %>% 
   st_set_geometry(NULL) %>% 
   # filter(Employees_thisyear > 0) %>% #Only firms with employees recorded in latest year
-  filter(between(Employees_thisyear,1,9)) %>% #Microfirms
+  filter(between(Employees_thisyear,1,3)) %>% #Microfirms
+  # filter(between(Employees_thisyear,4,9)) %>% #Microfirms
   group_by(id) %>% 
   summarise(
     AIIE_weightedbyemployees = weighted.mean(AIIEfinal,Employees_thisyear),
@@ -671,13 +683,7 @@ sq.aiie <- sq %>%
     section.summary,
     by = 'id'
   )
-  
-itl2 <- st_read('../RegionalEcons_web/data/ITL_geographies/International_Territorial_Level_2_January_2021_UK_BFE_V2_2022_-4735199360818908762/ITL2_JAN_2021_UK_BFE_V2.shp') %>% st_simplify(preserveTopology = T, dTolerance = 100) %>% 
-  filter(qg('manchester',ITL221NM))
 
-  
-lad <- st_read("~/Dropbox/MapPolygons/UK/2024/Local_Authority_Districts_May_2024_Boundaries_UK_BFC/LAD_MAY_2024_UK_BFC.shp") %>% st_simplify(preserveTopology = T, dTolerance = 100)
-  
 #https://stackoverflow.com/a/33144808/5023561
 #Make different pastel-ish colours
 # n <- length(unique(sq.aiie$modal_sector))
@@ -1000,6 +1006,10 @@ msoa_both <- msoa_both %>%
 
 #Then put em dodged on same line
 #In other situations, have to do this with two overlaid plots... let's see
+
+#save for ease of plot making
+# saveRDS(msoa_both,'local/data/msoa_3firmsizes_AIIE.rds')
+
 ggplot(msoa_both %>% filter(type != 'other'), 
        aes(
          x = AIIE_weightedbyemployees, 
@@ -1029,7 +1039,7 @@ ggplot(msoa_both %>% filter(type != 'other'),
 #For Manc only I think
 hex_micro <- overlay %>% 
   st_set_geometry(NULL) %>% 
-  filter(Employees_thisyear > 0 & Employees_thisyear < 10) %>% #Microfirms
+  filter(between(Employees_thisyear,1,3)) %>% #Microfirms
   group_by(id) %>% 
   summarise(
     AIIE_weightedbyemployees = weighted.mean(AIIEfinal,Employees_thisyear),
@@ -1040,9 +1050,24 @@ hex_micro <- overlay %>%
   group_by(id) %>%
   filter(sum(totalemployees) >= 10) %>% #keep only gridsquares where total employee count is more than / equal to 100
   ungroup() %>% 
-  mutate(firmsize = 'micro')
+  mutate(firmsize = '1-3')
 
 hex_rest <- overlay %>% 
+  st_set_geometry(NULL) %>% 
+  filter(between(Employees_thisyear,4,9)) %>% #Microfirms
+  group_by(id) %>% 
+  summarise(
+    AIIE_weightedbyemployees = weighted.mean(AIIEfinal,Employees_thisyear),
+    totalemployees = sum(Employees_thisyear),
+    totalfirms = n(),
+    la = max(localauthority_name)
+  ) %>% 
+  group_by(id) %>%
+  filter(sum(totalemployees) >= 10) %>% #keep only gridsquares where total employee count is more than / equal to 100
+  ungroup() %>% 
+  mutate(firmsize = '4-9')
+
+hex_evenmore <- overlay %>% 
   st_set_geometry(NULL) %>% 
   filter(Employees_thisyear > 9) %>% #Microfirms
   group_by(id) %>% 
@@ -1055,9 +1080,9 @@ hex_rest <- overlay %>%
   group_by(id) %>%
   filter(sum(totalemployees) >= 10) %>% #keep only gridsquares where total employee count is more than / equal to 100
   ungroup() %>% 
-  mutate(firmsize = 'other')
+  mutate(firmsize = '9+')
 
-hex_both <- bind_rows(hex_micro,hex_rest)
+hex_both <- bind_rows(hex_micro,hex_rest,hex_evenmore)
 
 ggplot(hex_both, 
        aes(
@@ -1066,14 +1091,30 @@ ggplot(hex_both,
          colour = firmsize,
          shape  = firmsize
        )) +
-  geom_point(position = position_dodge(width = 0.5), size = 3) +
+  geom_point(position = position_dodge(width = 0.7), size = 3) +
   scale_color_brewer(palette = 'Dark2') +
-  scale_shape_manual(values = c(25,24)) +
+  scale_shape_manual(values = c(25,22,24)) +
   geom_vline(xintercept = 0, colour = 'black', alpha = 0.5) +
   xlab('AIIE') +
   ylab('') +
-  guides(size = F) +
+  guides(size = F,alpha=F) +
   theme(legend.title=element_blank())
+
+# ggplot(hex_both, 
+#        aes(
+#          x = AIIE_weightedbyemployees, 
+#          y = fct_reorder(la,AIIE_weightedbyemployees), 
+#          colour = firmsize,
+#          shape  = firmsize
+#        )) +
+#   geom_point(position = position_dodge(width = 0.5), size = 3) +
+#   scale_color_brewer(palette = 'Dark2') +
+#   scale_shape_manual(values = c(25,24)) +
+#   geom_vline(xintercept = 0, colour = 'black', alpha = 0.5) +
+#   xlab('AIIE') +
+#   ylab('') +
+#   guides(size = F) +
+#   theme(legend.title=element_blank())
 
 
 

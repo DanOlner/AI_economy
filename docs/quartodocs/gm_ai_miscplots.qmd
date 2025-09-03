@@ -2,6 +2,7 @@
 title: "GM AI misc plots"
 author:
   - name: "Dan Olner"
+date: 09/03/2025
 format: 
   html:
     output-file: "GM_AI_miscplots"
@@ -35,11 +36,84 @@ soc_3dig_AIOE <- readRDS('../../data/UK_SOC_3digit_linkedAIOE.rds')
 
 ```
 
-[Link to](https://danolner.github.io/AI_economy/maps/GM_AI_FeltenAIIE_avweightedbyemployees_CompaniesHouse.html){target="_blank"} GM Companies House AI Industry Exposure hexmap (opens in new tab).
+# Maps and plots from linking Felten et al AI exposure index to UK data
 
-## UK MSOAs linked to Felten et al AI Occupational Exposure (AIOE): Greater Manchester local authorities + core cities
+Based on data from [Felten et al](https://sms.onlinelibrary.wiley.com/doi/full/10.1002/smj.3286) paper "Occupational, industry, and geographic exposure to artificial intelligence: A novel dataset and its potential uses" (2021). Original US data available [here](https://github.com/AIOE-Data/AIOE).
 
-Using Census 2021 Occupation data. MSOAs in each local authority have a wide range of average AIOE.
+[To be done: explanation of link process. All code for that is [here](https://github.com/DanOlner/AI_economy/tree/main).]
+
+## Links to interactive maps
+
+* [Map 1:](https://danolner.github.io/AI_economy/maps/GM_AI_FeltenAIIE_avweightedbyemployees_CompaniesHouse.html){target="_blank"} Greater Manchester AI Industry Exposure hexmap (opens in new tab). Using Companies House data, all firm sizes.
+* [Map 2:](https://danolner.github.io/AI_economy/maps/GM_AI_FeltenAIIE_avweightedbyemployees_CompaniesHouseFirms1to3employees.html){target="_blank"} Same but using **just** firms with 1 to 3 employees.
+
+
+
+## AI Industry Exposure (AIIE) applied to UK Companies House data
+
+Felten's AIIE is applied to individual firms in UK Companies House data [method]. This is done for accounts filed July 2024-25. 
+
+Here, these results are **summarised per MSOA** in Greater Manchester (and core cities for comparison) and **broken down into three groups**: firms with 1-3 employees, firms with 4 to 9 employees and 9+ employee firms.
+
+* AIIE on the x axis. Higher values are more exposed firms. Data is normalised, so an AIIE of zero is the mean value and 1 is a single standard deviation.
+* An AIIE average (weighted by employee number) is found for each MSOA, broken into the 3 firm size groups.
+* Local authorities are ordered top to bottom by average AIIE overall. Greater Manchester boroughs are larger, bolder points; core cities are smaller/fainter.
+
+Three things jump out. 
+
+1. Firms with 1 to 3 employees (green down-pointing triangles) are generally in more exposed sectors than other sized firms (though with overlap) and clearly more exposed than firms with 4-9 employees (red squares).
+2. That pattern is stronger in some places (Trafford, Stockport, Bolton) than others
+3. The overall AIIE exposure level per borough is mostly consistent within them, for different size firms. So Rochdale, Oldham, Tameside and Wigan are overall lower on the AIIE measure.
+
+
+
+
+```{r}
+#| fig-height: 11
+
+#For 'both' see 'all three!'
+#Made here:
+#https://github.com/DanOlner/AI_economy/blob/7127bf7e022198965d409bd71444767428bb2da4/sector_linkages.R#L876
+msoa_both <- readRDS('../../local/data/msoa_3firmsizes_AIIE.rds')
+
+ggplot(msoa_both %>% filter(type != 'other'), 
+       aes(
+         x = AIIE_weightedbyemployees, 
+         y = fct_reorder(localauthority_name,AIIE_weightedbyemployees), 
+         alpha = type, 
+         size = type,
+         colour = firmsize,
+         shape  = firmsize
+         )) +
+  geom_point(position = position_dodge(width = 0.7)) +
+  scale_size_manual(values = c(1.5,3)) +
+  scale_color_brewer(palette = 'Dark2') +
+  scale_shape_manual(values = c(25,22,24)) +
+  scale_alpha_manual(values = c(0.3,1)) +
+  geom_vline(xintercept = 0, colour = 'black', alpha = 0.5) +
+  xlab('AIIE') +
+  ylab('') +
+  guides(size = F,alpha=F) 
+  # theme(legend.title=element_blank())
+
+
+```
+
+
+
+## UK Census 2021 Occupation data linked to Felten et al AI Occupational Exposure (AIOE): Greater Manchester local authorities + core cities
+
+Census 2021 data at MSOA level contains 104 occupation categories. These are linked to Felten et al's AI Occupation Exposure (AIOE) and a weighted AIOE average worked out again (weighted by person counts in each occupation).
+
+(Census data is used as it provides the best current mix of coverage and granularity, though it is now older).
+
+So - this shows something different to the previous plot: the occupational exposure of **people who live in these MSOAs** (rather than firms' exposure in the above plot).
+
+Things to note from this one:
+
+* While the overall spread is less far from the mean (the AIOE is also normalised), some local authorities are clearly much more exposed, on this measure. For example, Trafford has very few MSOAs less than the AIOE mean.
+* Residents in Greater Manchester and core cities' MSOAs tend to be on the 'more exposed' side of zero [**I will need to check this in more detail to make sure it holds up; I'd have expected central Manchester to have more of a mix?**]
+* With some differences, the overall average order of local authorities doesn't differ hugely from that found in firm level data.
 
 ```{r}
 #| fig-height: 9
@@ -131,10 +205,13 @@ ggplot(msoa.aioe.avs %>% filter(type != 'other'),
 ```
 
 
-## Occupation exposure linked to Census 2021 at local authority level (showing range of occupational exposure, bars are 1 SD)
+## Same AIOE occupation exposure data, but just at local authority level
 
-Both AI exposure measures from Felten et al are normalised (0 mean 1 SD) and that translates to the UK link. So this is showing that - at broad local authority level - the overall differences due to industry mix are not massive (the same shows up in the Companies House data). **Below** LA level, stronger differences show up.
+I've included this just to make a quick point. This is the same data as the last plot, but with weighted mean and standard deviation applied at the local authority level. 
 
+The points are the means; bars are one standard deviation. 
+
+While the means do differ, each local authority's spread of AIOE covers a very similar level of exposure from top to bottom. **What I'm taking from this: important differences show up at the sub-local authority level.**
 
 ```{r}
 #| fig-height: 9
@@ -205,11 +282,13 @@ ggplot(la.aioe.avs %>% filter(type != 'other'),
 
 
 
+
+```{r eval=F}
+
 ## Companies house AIIE by employee similarly spread
 
-Density of AI Industry Exposure for indidivual employees in Companies House data for GM local authorities. Similar patterns but different points for peaks in different places (e.g. Manchester AIIE high values are higher peaks).
+#Density of AI Industry Exposure for indidivual employees in Companies House data for GM local authorities. Similar patterns but different points for peaks in different places (e.g. Manchester AIIE high values are higher peaks).
 
-```{r}
 
 gm_byemployee <- readRDS('../../local/data/gm_ch_byemployee.rds')
 

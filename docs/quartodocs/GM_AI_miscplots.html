@@ -7,6 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="Dan Olner">
+<meta name="dcterms.date" content="2025-09-03">
 
 <title>GM AI misc plots</title>
 <style>
@@ -61,6 +62,12 @@ ul.task-list li input[type="checkbox"] {
           </div>
   </div>
     
+    <div>
+    <div class="quarto-title-meta-heading">Published</div>
+    <div class="quarto-title-meta-contents">
+      <p class="date">September 3, 2025</p>
+    </div>
+  </div>
   
     
   </div>
@@ -70,10 +77,32 @@ ul.task-list li input[type="checkbox"] {
 </header>
 
 
-<p><a href="https://danolner.github.io/AI_economy/maps/GM_AI_FeltenAIIE_avweightedbyemployees_CompaniesHouse.html" target="_blank">Link to</a> GM Companies House AI Industry Exposure hexmap (opens in new tab).</p>
-<section id="uk-msoas-linked-to-felten-et-al-ai-occupational-exposure-aioe-greater-manchester-local-authorities-core-cities" class="level2">
-<h2 class="anchored" data-anchor-id="uk-msoas-linked-to-felten-et-al-ai-occupational-exposure-aioe-greater-manchester-local-authorities-core-cities">UK MSOAs linked to Felten et al AI Occupational Exposure (AIOE): Greater Manchester local authorities + core cities</h2>
-<p>Using Census 2021 Occupation data. MSOAs in each local authority have a wide range of average AIOE.</p>
+<section id="maps-and-plots-from-linking-felten-et-al-ai-exposure-index-to-uk-data" class="level1">
+<h1>Maps and plots from linking Felten et al AI exposure index to UK data</h1>
+<p>Based on data from <a href="https://sms.onlinelibrary.wiley.com/doi/full/10.1002/smj.3286">Felten et al</a> paper “Occupational, industry, and geographic exposure to artificial intelligence: A novel dataset and its potential uses” (2021). Original US data available <a href="https://github.com/AIOE-Data/AIOE">here</a>.</p>
+<p>[To be done: explanation of link process. All code for that is <a href="https://github.com/DanOlner/AI_economy/tree/main">here</a>.]</p>
+<section id="links-to-interactive-maps" class="level2">
+<h2 class="anchored" data-anchor-id="links-to-interactive-maps">Links to interactive maps</h2>
+<ul>
+<li><a href="https://danolner.github.io/AI_economy/maps/GM_AI_FeltenAIIE_avweightedbyemployees_CompaniesHouse.html" target="_blank">Map 1:</a> Greater Manchester AI Industry Exposure hexmap (opens in new tab). Using Companies House data, all firm sizes.</li>
+<li><a href="https://danolner.github.io/AI_economy/maps/GM_AI_FeltenAIIE_avweightedbyemployees_CompaniesHouseFirms1to3employees.html" target="_blank">Map 2:</a> Same but using <strong>just</strong> firms with 1 to 3 employees.</li>
+</ul>
+</section>
+<section id="ai-industry-exposure-aiie-applied-to-uk-companies-house-data" class="level2">
+<h2 class="anchored" data-anchor-id="ai-industry-exposure-aiie-applied-to-uk-companies-house-data">AI Industry Exposure (AIIE) applied to UK Companies House data</h2>
+<p>Felten’s AIIE is applied to individual firms in UK Companies House data [method]. This is done for accounts filed July 2024-25.</p>
+<p>Here, these results are <strong>summarised per MSOA</strong> in Greater Manchester (and core cities for comparison) and <strong>broken down into three groups</strong>: firms with 1-3 employees, firms with 4 to 9 employees and 9+ employee firms.</p>
+<ul>
+<li>AIIE on the x axis. Higher values are more exposed firms. Data is normalised, so an AIIE of zero is the mean value and 1 is a single standard deviation.</li>
+<li>An AIIE average (weighted by employee number) is found for each MSOA, broken into the 3 firm size groups.</li>
+<li>Local authorities are ordered top to bottom by average AIIE overall. Greater Manchester boroughs are larger, bolder points; core cities are smaller/fainter.</li>
+</ul>
+<p>Three things jump out.</p>
+<ol type="1">
+<li>Firms with 1 to 3 employees (green down-pointing triangles) are generally in more exposed sectors than other sized firms (though with overlap) and clearly more exposed than firms with 4-9 employees (red squares).</li>
+<li>That pattern is stronger in some places (Trafford, Stockport, Bolton) than others</li>
+<li>The overall AIIE exposure level per borough is mostly consistent within them, for different size firms. So Rochdale, Oldham, Tameside and Wigan are overall lower on the AIIE measure.</li>
+</ol>
 <div class="cell">
 <div class="cell-output-display">
 <div>
@@ -84,9 +113,17 @@ ul.task-list li input[type="checkbox"] {
 </div>
 </div>
 </section>
-<section id="occupation-exposure-linked-to-census-2021-at-local-authority-level-showing-range-of-occupational-exposure-bars-are-1-sd" class="level2">
-<h2 class="anchored" data-anchor-id="occupation-exposure-linked-to-census-2021-at-local-authority-level-showing-range-of-occupational-exposure-bars-are-1-sd">Occupation exposure linked to Census 2021 at local authority level (showing range of occupational exposure, bars are 1 SD)</h2>
-<p>Both AI exposure measures from Felten et al are normalised (0 mean 1 SD) and that translates to the UK link. So this is showing that - at broad local authority level - the overall differences due to industry mix are not massive (the same shows up in the Companies House data). <strong>Below</strong> LA level, stronger differences show up.</p>
+<section id="uk-census-2021-occupation-data-linked-to-felten-et-al-ai-occupational-exposure-aioe-greater-manchester-local-authorities-core-cities" class="level2">
+<h2 class="anchored" data-anchor-id="uk-census-2021-occupation-data-linked-to-felten-et-al-ai-occupational-exposure-aioe-greater-manchester-local-authorities-core-cities">UK Census 2021 Occupation data linked to Felten et al AI Occupational Exposure (AIOE): Greater Manchester local authorities + core cities</h2>
+<p>Census 2021 data at MSOA level contains 104 occupation categories. These are linked to Felten et al’s AI Occupation Exposure (AIOE) and a weighted AIOE average worked out again (weighted by person counts in each occupation).</p>
+<p>(Census data is used as it provides the best current mix of coverage and granularity, though it is now older).</p>
+<p>So - this shows something different to the previous plot: the occupational exposure of <strong>people who live in these MSOAs</strong> (rather than firms’ exposure in the above plot).</p>
+<p>Things to note from this one:</p>
+<ul>
+<li>While the overall spread is less far from the mean (the AIOE is also normalised), some local authorities are clearly much more exposed, on this measure. For example, Trafford has very few MSOAs less than the AIOE mean.</li>
+<li>Residents in Greater Manchester and core cities’ MSOAs tend to be on the ‘more exposed’ side of zero [<strong>I will need to check this in more detail to make sure it holds up; I’d have expected central Manchester to have more of a mix?</strong>]</li>
+<li>With some differences, the overall average order of local authorities doesn’t differ hugely from that found in firm level data.</li>
+</ul>
 <div class="cell">
 <div class="cell-output-display">
 <div>
@@ -97,9 +134,11 @@ ul.task-list li input[type="checkbox"] {
 </div>
 </div>
 </section>
-<section id="companies-house-aiie-by-employee-similarly-spread" class="level2">
-<h2 class="anchored" data-anchor-id="companies-house-aiie-by-employee-similarly-spread">Companies house AIIE by employee similarly spread</h2>
-<p>Density of AI Industry Exposure for indidivual employees in Companies House data for GM local authorities. Similar patterns but different points for peaks in different places (e.g.&nbsp;Manchester AIIE high values are higher peaks).</p>
+<section id="same-aioe-occupation-exposure-data-but-just-at-local-authority-level" class="level2">
+<h2 class="anchored" data-anchor-id="same-aioe-occupation-exposure-data-but-just-at-local-authority-level">Same AIOE occupation exposure data, but just at local authority level</h2>
+<p>I’ve included this just to make a quick point. This is the same data as the last plot, but with weighted mean and standard deviation applied at the local authority level.</p>
+<p>The points are the means; bars are one standard deviation.</p>
+<p>While the means do differ, each local authority’s spread of AIOE covers a very similar level of exposure from top to bottom. <strong>What I’m taking from this: important differences show up at the sub-local authority level.</strong></p>
 <div class="cell">
 <div class="cell-output-display">
 <div>
@@ -109,6 +148,7 @@ ul.task-list li input[type="checkbox"] {
 </div>
 </div>
 </div>
+</section>
 </section>
 
 </main>
