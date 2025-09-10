@@ -4,6 +4,7 @@ library(nomisr)
 library(sf)
 library(tmap)
 library(ggridges)
+library(BradleyTerry2)
 source('functions/helpers.R')
 source('functions/ad_hoc_functions.R')
 
@@ -404,6 +405,8 @@ usuk1col.avs <- usuk1col %>%
   ) %>% 
   ungroup()
 
+saveRDS('data/sic_a')
+
 
 #What's dist look like now? I have questions about the dist...
 #Has hardly changed...
@@ -569,7 +572,7 @@ saveRDS(ch_gm_aiie,'local/data/ch_gm_aiie_draft1.rds')
 # REPEAT FOR ALL CH DATA FOR GB----
 
 #Let' see if runs OK for all of it...
-#Get 5dig codes to match on
+#Get 5dig codes to match on for each of the 4 possible SIC sectors per firm
 ch <- ch %>%
   mutate(across(SICCode.SicText_1:SICCode.SicText_4,~ str_sub(.,1,5),.names = "fivedig_{.col}"))
 
@@ -709,7 +712,7 @@ tm_shape(
   tm_borders(col = 'black', lwd = 1, fill_alpha = 0.3) +
   tm_shape(itl2) +
   tm_borders(col = 'black', lwd = 4) +
-  tm_view(set_view = c(-2.2,53.49326048352635,11))#centred on Bradford
+  tm_view(set_view = c(-2.2,53.49326048352635,11))#centred on GM
 # tm_view(set_view = c(-1.598452,52.740283,8))
 # tm_view(bbox = "England")
   
@@ -766,7 +769,7 @@ saveRDS(gmlas,'data/gmlas.rds')
 
 #For most recent year
 
-#From https://github.com/DanOlner/RegionalEconomicTools/blob/46907c9eb05193fe790579f73ff5f1ff019d90f5/quarto_docs/Bradford_sectorclusters.qmd#L384C1-L411C53
+#From https://github.com/DanOlner/RegionalEconomicTools/blob/46907c9eb05193fe790579f73ff5f1ff019d90f5/quarto_docs/GM_sectorclusters.qmd#L384C1-L411C53
 #Get list of corecities
 corecities <- getdistinct('sheffield|Belfast|Birmingham|Bristol|Cardiff|Glasgow|Leeds|Liverpool|Manchester|Tyne|Nottingham', unique(ch_all_aiie$localauthority_name))
 
@@ -1117,15 +1120,6 @@ ggplot(hex_both,
 #   theme(legend.title=element_blank())
 
 
-
-
-
-
-
-
-
-
-
 #Since we now have both (other run in occ script) let's just corr...
 #Each in own col
 both <- msoa_summary %>% 
@@ -1142,6 +1136,454 @@ ggplot(
   # coord_fixed() +
   facet_wrap(~localauthority_name, nrow = 3, scales = 'free') +
   geom_smooth(method='lm')
+
+
+
+# COMPARE REPLACE/AUGMENT SCALE TO AIIE-----
+
+#Can't directly compare because AIIE applied to CH data is different from (different SIC level) AIIE link.
+
+#Need to apply the various new scales to CH data as we did before
+#Let's nab them first
+#reminder, the SDs are pretty hoofing here
+#We'll apply means for now
+repl_v_aug <- readRDS('../../../R/LLM_testing/data/sectorprobs_augmentmorethanreplace.rds')
+
+#Attaching the sic codes here should be much easier than the 5/4/3/2 cascade we had to do for AIIE
+#We *just* use 3 digit
+#Though the 'find av for any values attached' process will be the same
+
+#Get CH data again
+ch <- readRDS("../companieshouseopen/local/PROCESSED_accountextracts_n_livelist_geocoded_combined_July2025.rds") 
+
+#Get 3 of the 5 digits from 5dig codes to match on for each of the 4 possible SIC sectors per firm
+#Matching to 3dig in the replace/augment data
+ch <- ch %>%
+  mutate(across(SICCode.SicText_1:SICCode.SicText_4,~ str_sub(.,1,3),.names = "threedig_{.col}"))
+
+#Attach the scale to any cols where we have SIC codes for the firm
+#Not a nice mappy way!
+ch <- addReplaceAugmentScale(ch,threedig_SICCode.SicText_1)
+ch <- addReplaceAugmentScale(ch,threedig_SICCode.SicText_2)
+ch <- addReplaceAugmentScale(ch,threedig_SICCode.SicText_3)
+ch <- addReplaceAugmentScale(ch,threedig_SICCode.SicText_4)
+
+#Get measure mean across all sectors for this firm
+#Let's try some faster options... yep, instant!
+rowmeanz <- rowMeans(ch %>% st_set_geometry(NULL) %>% select(mean.x:mean.y.y), na.rm = T)
+#Add back in
+ch <- ch %>% mutate(augment_morethan_replace_prob = rowmeanz)
+
+# table(is.na(ch$augment_morethan_replace_prob))
+# table(is.nan(ch$augment_morethan_replace_prob))
+
+#Keep only those with values
+#Before: 3005763 rows, after: 2890489 rows
+ch <- ch %>% filter(!is.nan(augment_morethan_replace_prob))
+
+#Save!
+saveRDS(ch,'local/data/ch_augment_morethan_replace_prob_scale_attached.rds')
+
+#...
+
+#OK - get AIIE again
+ch_all_aiie <- readRDS('local/data/ch_all_aiie_draft1.rds')
+
+#Inner join to get both in one place before summarising
+ch <- ch %>% 
+  inner_join(
+    ch_all_aiie %>% st_set_geometry(NULL) %>% select(CompanyNumber,accountcode,AIIEfinal),
+    by = c('CompanyNumber','accountcode')
+  )
+
+#Add MSOAs
+msoa.geo <- st_read('../../../MapPolygons/EnglandWalesMerged/Middle_layer_Super_Output_Areas_December_2021_Boundaries_EW_BGC_V3_-3870998653275641389.geojson') %>% 
+  select(MSOA21CD)
+# select(MSOA21CD,MSOA21NM) %>% 
+# mutate(laname = str_sub(MSOA21NM,1,-5))
+
+#52 seconds
+x <- proc.time()
+ch_msoaoverlay <- st_intersection(
+  ch %>% select(CompanyName,CompanyNumber,SICCode.SicText_1:SICCode.SicText_4,localauthority_code:ITL221NM,accountcode,dormantstatus,Employees_thisyear,Employees_lastyear,SIC_5DIGIT_CODE:age_of_firm_years,AIIEfinal,augment_morethan_replace_prob),
+  msoa.geo)
+proc.time() - x
+
+#1.61GB
+# pryr::object_size(ch_msoaoverlay)
+
+#Summarise by MSOA, no geom
+msoa_summary <- ch_msoaoverlay %>% 
+  st_set_geometry(NULL) %>% 
+  filter(Employees_thisyear > 0) %>% #Only firms with employees recorded in latest year
+  group_by(MSOA21CD) %>% 
+  summarise(
+    localauthority_name = max(localauthority_name),
+    AIIE_weightedbyemployees = weighted.mean(AIIEfinal,Employees_thisyear),
+    AIIE_SD_weightedbyemployees = sqrt(Hmisc::wtd.var(AIIEfinal,Employees_thisyear)),
+    augmentmorethanreplaceprob_weightedbyemployees = weighted.mean(augment_morethan_replace_prob,Employees_thisyear),
+    augmentmorethanreplaceprob_SD_weightedbyemployees = sqrt(Hmisc::wtd.var(augment_morethan_replace_prob,Employees_thisyear)),
+    totalemployees = sum(Employees_thisyear),
+    totalfirms = n()
+  ) %>% ungroup()
+
+#Add in place flags
+msoa_summary <- msoa_summary %>% 
+  mutate(type = case_when(
+    localauthority_name %in% gmlas ~ "GM LA",
+    localauthority_name %in% corecities[!qg('manc',corecities)] ~ "core city (minus manc)",
+    .default = "other"
+  ),
+  is_GM = localauthority_name %in% gmlas
+  )
+
+
+#OK, grids broken down by GM LAs
+ggplot(
+  msoa_summary %>% filter(type == 'GM LA'),
+  aes(x = AIIE_weightedbyemployees, y = augmentmorethanreplaceprob_weightedbyemployees)
+  ) +
+  geom_point(size = 3) +
+  geom_vline(xintercept = 0) +
+  # geom_hline(yintercept = 0) +
+  facet_wrap(~localauthority_name)
+
+
+
+
+#OK well, many thoughts about that!
+#But let's make a hexmap of aug > replace too
+#Taken from here
+#https://github.com/DanOlner/companieshouseopen/blob/e6dfcd2eef5a2fb142f5fffc05394645daf9b4d4/testcode/initial_datadigging.R#L123C1-L150C113 
+
+#Just for GM
+sq = st_make_grid(ch %>% filter(ITL221NM == 'Greater Manchester'), cellsize = 1000, square = F)
+
+#Turn into sf object so gridsquares can have IDs to group by
+sq <- sq %>% st_sf() %>% mutate(id = 1:nrow(.))
+
+itl2 <- st_read('../RegionalEcons_web/data/ITL_geographies/International_Territorial_Level_2_January_2021_UK_BFE_V2_2022_-4735199360818908762/ITL2_JAN_2021_UK_BFE_V2.shp') %>% st_simplify(preserveTopology = T, dTolerance = 100) %>% 
+  filter(qg('manchester',ITL221NM))
+
+
+lad <- st_read("~/Dropbox/MapPolygons/UK/2024/Local_Authority_Districts_May_2024_Boundaries_UK_BFC/LAD_MAY_2024_UK_BFC.shp") %>% st_simplify(preserveTopology = T, dTolerance = 100)
+
+#Intersection...
+overlay <- st_intersection(ch %>% filter(ITL221NM == 'Greater Manchester'),sq)
+
+
+#This no longer needs to be geo, which will speed up
+#Can link back to grids once done
+
+#Let's find an average AIIE weighted by employee number in each grid square
+section.summary <- overlay %>% 
+  st_set_geometry(NULL) %>% 
+  filter(Employees_thisyear > 0) %>% #Only firms with employees recorded in latest year
+  # filter(between(Employees_thisyear,1,3)) %>% #Microfirms
+  # filter(between(Employees_thisyear,4,9)) %>% #Microfirms
+  group_by(id) %>% 
+  summarise(
+    AIIE_weightedbyemployees = weighted.mean(AIIEfinal,Employees_thisyear),
+    augmentmorethanreplaceprob_weightedbyemployees = weighted.mean(augment_morethan_replace_prob,Employees_thisyear),
+    totalemployees = sum(Employees_thisyear),
+    totalfirms = n(),
+    la = max(localauthority_name)
+  ) %>% 
+  group_by(id) %>%
+  filter(sum(totalemployees) >= 10) %>% #keep only gridsquares where total employee count is more than / equal to 100
+  ungroup()
+
+#Link that back into the grid squares...
+#Use right join to drop empties
+sq.ch <- sq %>% 
+  right_join(
+    section.summary,
+    by = 'id'
+  )
+
+#https://stackoverflow.com/a/33144808/5023561
+#Make different pastel-ish colours
+# n <- length(unique(sq.aiie$modal_sector))
+# set.seed(101)
+# qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+# col_vector = unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))
+# pie(rep(1,n), col=sample(col_vector, n))
+
+#Add in hover text
+sq.ch <- sq.ch %>% 
+  mutate(hovertext = paste0(la,", aug>repl: ", round(augmentmorethanreplaceprob_weightedbyemployees,2)," Firm count: ",totalfirms, ", id: ",id))
+
+tmap_mode('view')
+
+tm_shape(
+  sq.ch
+  # sq.ch %>% mutate(combined_label = paste0(ITL221NM,', ',modal_sector))
+) +
+  tm_polygons('augmentmorethanreplaceprob_weightedbyemployees', fill.scale = tm_scale_continuous(values = "matplotlib.rd_yl_bu"), 
+              id="hovertext", col_alpha = 0, fill_alpha = 0.65) +
+  # tm_view(set.view = c(7, 51, 4)) +
+  tm_shape(lad) +
+  tm_borders(col = 'black', lwd = 1, fill_alpha = 0.3) +
+  tm_shape(itl2) +
+  tm_borders(col = 'black', lwd = 4) +
+  tm_view(set_view = c(-2.2,53.49326048352635,11))#centred on GM
+# tm_view(set_view = c(-1.598452,52.740283,8))
+# tm_view(bbox = "England")
+
+
+#While we're here, for hexes let's repeat the scatterplots...
+ggplot(
+  sq.ch,
+  aes(x = AIIE_weightedbyemployees, y = augmentmorethanreplaceprob_weightedbyemployees)
+) +
+  geom_point(size = 3) +
+  geom_vline(xintercept = 0) +
+  geom_hline(yintercept = 0.5) +
+  facet_wrap(~la)
+
+
+
+
+# SEPARATE AUGMENTABLE AND REPLACEABLE RANKINGS----
+
+aug <- readRDS('../../../R/LLM_testing/data/prob_pairings_acrosssetors_augmentability.rds')
+repl <- readRDS('../../../R/LLM_testing/data/prob_pairings_acrosssetors_replaceability.rds')
+
+#Run Bradley Terry on em
+#Nabbing from LLM_testing/ollama_test.R
+aug_BT <- BTm(cbind(win1, win2), sic3digit1, sic3digit2, ~ sic3digit,
+                 id = "sic3digit", data = aug)
+
+repl_BT <- BTm(cbind(win1, win2), sic3digit1, sic3digit2, ~ sic3digit,
+                 id = "sic3digit", data = repl)
+
+#Combine
+bt_trials <- tibble(
+  names = names(aug_BT$coefficients),
+  replace = aug_BT$coefficients
+) %>% 
+  left_join(
+    tibble(
+      names = names(repl_BT$coefficients),
+      augment = repl_BT$coefficients
+    ),
+    by = 'names'
+  ) %>% 
+  mutate(SIC_3DIGIT_CODE = str_sub(names,-3,-1)) %>% 
+  relocate(SIC_3DIGIT_CODE,.before = names)
+
+#Mean centre them
+bt_trials_meancentred <- bt_trials %>% 
+  mutate(
+    replace = as.numeric(scale(replace, scale = F)),
+    augment = as.numeric(scale(augment, scale = F))
+  )
+
+
+
+#ADD INTO CH DATA
+#Not sure it really needs its own function does it?
+#Link four times, one for each possible firm sector
+chk <- ch %>% 
+  left_join(
+    bt_trials_meancentred %>% select(-names),
+    by = c('threedig_SICCode.SicText_1' = 'SIC_3DIGIT_CODE')
+  )
+  
+chk <- chk %>% 
+  left_join(
+    bt_trials_meancentred %>% select(-names),
+    by = c('threedig_SICCode.SicText_2' = 'SIC_3DIGIT_CODE')
+  )
+  
+chk <- chk %>% 
+  left_join(
+    bt_trials_meancentred %>% select(-names),
+    by = c('threedig_SICCode.SicText_3' = 'SIC_3DIGIT_CODE')
+  )
+  
+chk <- chk %>% 
+  left_join(
+    bt_trials_meancentred %>% select(-names),
+    by = c('threedig_SICCode.SicText_4' = 'SIC_3DIGIT_CODE')
+  )
+  
+#Aand means
+rowmeanz <- rowMeans(chk %>% st_set_geometry(NULL) %>% select(contains('replace.')), na.rm = T)
+#Add back in
+chk <- chk %>% mutate(replace_logability_BT = rowmeanz)
+
+rowmeanz <- rowMeans(chk %>% st_set_geometry(NULL) %>% select(contains('augment.')), na.rm = T)
+#Add back in
+chk <- chk %>% mutate(augment_logability_BT = rowmeanz)
+
+#remove unnecessary columns and save
+chk <- chk %>% select(-c(threedig_SICCode.SicText_1:mean.y.y),-c(replace.x:augment.y.y))
+
+saveRDS(chk,'local/data/ch_with_4AIE_measures.rds')
+
+
+
+
+#Then MSOA overlay again and comparison of all measures
+ch <- chk
+rm(chk)
+
+x <- proc.time()
+ch_msoaoverlay <- st_intersection(
+  ch %>% select(CompanyName,CompanyNumber,SICCode.SicText_1:SICCode.SicText_4,localauthority_code:ITL221NM,accountcode,dormantstatus,Employees_thisyear,Employees_lastyear,SIC_5DIGIT_CODE:age_of_firm_years,augment_morethan_replace_prob:augment_logability_BT),
+  msoa.geo)
+proc.time() - x
+
+#1.61GB
+# pryr::object_size(ch_msoaoverlay)
+
+#Summarise by MSOA, no geom
+msoa_summary <- ch_msoaoverlay %>% 
+  st_set_geometry(NULL) %>% 
+  filter(Employees_thisyear > 0) %>% #Only firms with employees recorded in latest year
+  group_by(MSOA21CD) %>% 
+  summarise(
+    localauthority_name = max(localauthority_name),
+    AIIE_weightedbyemployees = weighted.mean(AIIEfinal,Employees_thisyear),
+    AIIE_SD_weightedbyemployees = sqrt(Hmisc::wtd.var(AIIEfinal,Employees_thisyear)),
+    augmentmorethanreplaceprob_weightedbyemployees = weighted.mean(augment_morethan_replace_prob,Employees_thisyear),
+    augmentmorethanreplaceprob_SD_weightedbyemployees = sqrt(Hmisc::wtd.var(augment_morethan_replace_prob,Employees_thisyear)),
+    augmentBT_weightedbyemployees = weighted.mean(augment_logability_BT,Employees_thisyear),
+    replaceBT_weightedbyemployees = weighted.mean(replace_logability_BT,Employees_thisyear),
+    totalemployees = sum(Employees_thisyear),
+    totalfirms = n()
+  ) %>% ungroup()
+
+#Add in place flags
+msoa_summary <- msoa_summary %>% 
+  mutate(type = case_when(
+    localauthority_name %in% gmlas ~ "GM LA",
+    localauthority_name %in% corecities[!qg('manc',corecities)] ~ "core city (minus manc)",
+    .default = "other"
+  ),
+  is_GM = localauthority_name %in% gmlas
+  )
+
+
+#OK, grids broken down by GM LAs
+ggplot(
+  msoa_summary %>% filter(type == 'GM LA'),
+  aes(x = AIIE_weightedbyemployees, y = augmentmorethanreplaceprob_weightedbyemployees)
+) +
+  geom_point(size = 3) +
+  geom_vline(xintercept = 0) +
+  geom_hline(yintercept = 0.5) +
+  facet_wrap(~localauthority_name, scales='free') +
+  geom_smooth(method='lm')
+
+ggplot(
+  msoa_summary %>% filter(type == 'GM LA'),
+  aes(x = AIIE_weightedbyemployees, y = augmentBT_weightedbyemployees)
+) +
+  geom_point(size = 3) +
+  geom_vline(xintercept = 0) +
+  geom_hline(yintercept = 0) +
+  facet_wrap(~localauthority_name, scales='free') +
+  geom_smooth(method='lm')
+
+ggplot(
+  msoa_summary %>% filter(type == 'GM LA'),
+  aes(x = AIIE_weightedbyemployees, y = replaceBT_weightedbyemployees)
+) +
+  geom_point(size = 3) +
+  geom_vline(xintercept = 0) +
+  geom_hline(yintercept = 0) +
+  facet_wrap(~localauthority_name, scales='free') +
+  geom_smooth(method='lm', scales='free')
+
+ggplot(
+  msoa_summary %>% filter(type == 'GM LA'),
+  aes(x = augmentBT_weightedbyemployees, y = replaceBT_weightedbyemployees)
+) +
+  geom_point(size = 3) +
+  geom_vline(xintercept = 0) +
+  geom_hline(yintercept = 0) +
+  facet_wrap(~localauthority_name, scales='free') +
+  geom_smooth(method='lm', scales='free')
+
+
+
+
+#Let's see about a bivariate hex
+#Just for GM
+ch_gm <- ch %>% filter(ITL221NM == 'Greater Manchester')
+
+sq = st_make_grid(ch_gm, cellsize = 1000, square = F)
+
+#Turn into sf object so gridsquares can have IDs to group by
+sq <- sq %>% st_sf() %>% mutate(id = 1:nrow(.))
+
+overlay <- st_intersection(ch_gm,sq)
+
+
+#This no longer needs to be geo, which will speed up
+#Can link back to grids once done
+
+#Let's find an average AIIE weighted by employee number in each grid square
+hexsummary <- overlay %>% 
+  st_set_geometry(NULL) %>% 
+  # filter(Employees_thisyear > 0) %>% #Only firms with employees recorded in latest year
+  filter(between(Employees_thisyear,1,3)) %>% #Microfirms
+  # filter(between(Employees_thisyear,4,9)) %>% #Microfirms
+  # filter(Employees_thisyear > 9) %>% 
+  group_by(id) %>% 
+  summarise(
+    AIIE_weightedbyemployees = weighted.mean(AIIEfinal,Employees_thisyear),
+    augmentmorethanreplaceprob_weightedbyemployees = weighted.mean(augment_morethan_replace_prob,Employees_thisyear),
+    augmentBT_weightedbyemployees = weighted.mean(augment_logability_BT,Employees_thisyear),
+    replaceBT_weightedbyemployees = weighted.mean(replace_logability_BT,Employees_thisyear),
+    totalemployees = sum(Employees_thisyear),
+    totalfirms = n(),
+    la = max(localauthority_name)
+  ) %>% 
+  group_by(id) %>%
+  filter(sum(totalemployees) >= 10) %>% #keep only gridsquares where total employee count is more than / equal to 100
+  ungroup()
+
+
+#Link that back into the grid squares...
+#Use right join to drop empties
+sq.ch <- sq %>% 
+  right_join(
+    hexsummary,
+    by = 'id'
+  )
+
+sq.ch <- sq.ch %>% 
+  mutate(hovertext = paste0(la,", aug>repl: ", round(augmentmorethanreplaceprob_weightedbyemployees,2)," Firm count: ",totalfirms, ", id: ",id))
+
+# tmap_mode('view')
+tmap_mode('plot')
+
+tm_shape(sq.ch %>% rename(aug = augmentBT_weightedbyemployees, repl = replaceBT_weightedbyemployees, AIIE = AIIE_weightedbyemployees, aug_v_repl = augmentmorethanreplaceprob_weightedbyemployees)) +
+  tm_polygons(
+    # fill = tm_vars(c("AIIE", "aug_v_repl"), 
+    fill = tm_vars(c("aug", "repl"),
+                   multivariate = TRUE), id="hovertext",
+              fill.scale = 
+                tm_scale_bivariate(
+                  scale1 = tm_scale_intervals(style = "fisher", n = 3, labels = c("L", "M", "H")),
+                  scale2 = tm_scale_intervals(style = "fisher", n = 3, labels = c("L", "M", "H")),
+                  # values = "stevens.bluered")) +
+                  values = "bu_br_bivs")) +
+  # tm_view(set.view = c(7, 51, 4)) +
+  tm_shape(lad) +
+  tm_borders(col = 'black', lwd = 1, fill_alpha = 0.3) +
+  tm_shape(itl2) +
+  tm_borders(col = 'black', lwd = 4) +
+  tm_view(set_view = c(-2.2,53.49326048352635,11))#centred on GM
+# tm_view(set_view = c(-1.598452,52.740283,8))
+# tm_view(bbox = "England")
+
+
+
+
 
 
 

@@ -6,7 +6,7 @@ addAIIE <- function(df,colname){
   colname = enquo(colname)
   
   #Well this is horrible...
-  #Hack for c() not being a quosure friendly function in joins
+  #Hack for c() not being a quosure-friendly function in joins
   #https://stackoverflow.com/questions/48449799/join-datasets-using-a-quosure-as-the-by-argument
   # by = set_names(quo_name(colname), 'SICno')
   by = set_names('SICno',quo_name(colname))
@@ -60,3 +60,21 @@ addAIIE <- function(df,colname){
     select(-c(AIIE_5dig:AIIE_2dig))
   
 }
+
+addReplaceAugmentScale <- function(df,colname){
+  
+  colname = enquo(colname)
+  
+  #Hack for c() not being a quosure-friendly function in joins
+  #Note is in reverse order to what by wants
+  #https://stackoverflow.com/questions/48449799/join-datasets-using-a-quosure-as-the-by-argument
+  by = set_names('sic',quo_name(colname))
+  
+  df %>% 
+    left_join(
+      repl_v_aug %>% select(sic,mean),
+      by = by
+    )
+  
+}
+
