@@ -1,5 +1,6 @@
 #Exploring sector links
 library(tidyverse)
+library(plotly)
 library(nomisr)
 library(sf)
 library(tmap)
@@ -652,7 +653,13 @@ itl2 <- st_read('../RegionalEcons_web/data/ITL_geographies/International_Territo
 
 lad <- st_read("~/Dropbox/MapPolygons/UK/2024/Local_Authority_Districts_May_2024_Boundaries_UK_BFC/LAD_MAY_2024_UK_BFC.shp") %>% st_simplify(preserveTopology = T, dTolerance = 100)
 
+#get just GM boroughs. All match companies house data
+table(unique(ch$localauthority_name[ch$ITL221NM=='Greater Manchester']) %in% lad$LAD24NM)
+lad <- lad %>% filter(LAD24NM %in% unique(ch$localauthority_name[ch$ITL221NM=='Greater Manchester']))
 
+#Save both of those for ease of loading elsewhere
+saveRDS(itl2,'local/data/itl2_for_GM.rds')
+saveRDS(lad,'local/data/las_for_GM.rds')
 
 
 #Intersection...
@@ -1183,6 +1190,7 @@ ch <- ch %>% filter(!is.nan(augment_morethan_replace_prob))
 
 #Save!
 saveRDS(ch,'local/data/ch_augment_morethan_replace_prob_scale_attached.rds')
+ch <- readRDS('local/data/ch_augment_morethan_replace_prob_scale_attached.rds')
 
 #...
 
@@ -1245,7 +1253,7 @@ ggplot(
   ) +
   geom_point(size = 3) +
   geom_vline(xintercept = 0) +
-  # geom_hline(yintercept = 0) +
+  geom_hline(yintercept = 0.5) +
   facet_wrap(~localauthority_name)
 
 
@@ -1360,12 +1368,12 @@ repl_BT <- BTm(cbind(win1, win2), sic3digit1, sic3digit2, ~ sic3digit,
 #Combine
 bt_trials <- tibble(
   names = names(aug_BT$coefficients),
-  replace = aug_BT$coefficients
+  augment = aug_BT$coefficients
 ) %>% 
   left_join(
     tibble(
       names = names(repl_BT$coefficients),
-      augment = repl_BT$coefficients
+      replace = repl_BT$coefficients
     ),
     by = 'names'
   ) %>% 
@@ -1379,6 +1387,44 @@ bt_trials_meancentred <- bt_trials %>%
     augment = as.numeric(scale(augment, scale = F))
   )
 
+#Version with sector names attached
+bt_trials_wsectors <- bt_trials_meancentred %>% 
+  left_join(
+    read_csv("data/siclookup_allcodes.csv") %>% select(contains('3DIGIT')) %>% distinct(),
+    by = 'SIC_3DIGIT_CODE'
+  )
+
+#Check... tick
+# mean(bt_trials_wsectors$augment)
+# mean(bt_trials_wsectors$replace)
+
+saveRDS(bt_trials_wsectors,'local/data/bt_trials.rds')
+
+p <- ggplot(bt_trials_wsectors,aes(x = replace, y = augment, label = SIC_3DIGIT_NAME)) +
+  geom_point(size = 3) +
+  geom_vline(xintercept = 0) +
+  geom_hline(yintercept = 0) 
+
+ggplotly(p, tooltip = 'label')
+
+
+
+#While we're here, make a version that's got the "aug > replace per sector" in there too
+#To check relationship
+#Just check same row number... tick
+summary(repl_v_aug)
+summary(bt_trials_meancentred)
+table(repl_v_aug$sic %in% bt_trials$SIC_3DIGIT_CODE)
+#some we don't want dropped right? Ah, 010 is the comparator / 0 sector in the BT data
+repl_v_aug$sic[!repl_v_aug$sic %in% bt_trials$SIC_3DIGIT_CODE]
+
+allmeasures <- bt_trials_meancentred %>% 
+  left_join(
+    repl_v_aug %>% select(-SIC_3DIGIT_NAME,augmorethanrepl_prob = mean, -sd),
+    by = c('SIC_3DIGIT_CODE' = 'sic')
+  )
+
+pairs(allmeasures %>% select(-SIC_3DIGIT_CODE,-names))
 
 
 #ADD INTO CH DATA
@@ -1423,6 +1469,7 @@ chk <- chk %>% select(-c(threedig_SICCode.SicText_1:mean.y.y),-c(replace.x:augme
 saveRDS(chk,'local/data/ch_with_4AIE_measures.rds')
 
 
+# PLOT 4 AEI MEASURES----
 
 
 #Then MSOA overlay again and comparison of all measures
@@ -1521,6 +1568,9 @@ sq <- sq %>% st_sf() %>% mutate(id = 1:nrow(.))
 
 overlay <- st_intersection(ch_gm,sq)
 
+#Save for output
+saveRDS(overlay,'local/data/AIE4measures_hexoverlay.rds')
+saveRDS(sq,'local/data/sq_forhexoverlay.rds')
 
 #This no longer needs to be geo, which will speed up
 #Can link back to grids once done
@@ -1531,7 +1581,7 @@ hexsummary <- overlay %>%
   # filter(Employees_thisyear > 0) %>% #Only firms with employees recorded in latest year
   filter(between(Employees_thisyear,1,3)) %>% #Microfirms
   # filter(between(Employees_thisyear,4,9)) %>% #Microfirms
-  # filter(Employees_thisyear > 9) %>% 
+  # filter(Employees_thisyear > 9) %>%
   group_by(id) %>% 
   summarise(
     AIIE_weightedbyemployees = weighted.mean(AIIEfinal,Employees_thisyear),
@@ -1561,9 +1611,9 @@ sq.ch <- sq.ch %>%
 # tmap_mode('view')
 tmap_mode('plot')
 
-tm_shape(sq.ch %>% rename(aug = augmentBT_weightedbyemployees, repl = replaceBT_weightedbyemployees, AIIE = AIIE_weightedbyemployees, aug_v_repl = augmentmorethanreplaceprob_weightedbyemployees)) +
+tm_shape(sq.ch %>% rename(aug = augmentBT_weightedbyemployees, repl = replaceBT_weightedbyemployees, AIIE = AIIE_weightedbyemployees, `aug>rep` = augmentmorethanreplaceprob_weightedbyemployees)) +
   tm_polygons(
-    # fill = tm_vars(c("AIIE", "aug_v_repl"), 
+    # fill = tm_vars(c("AIIE", "aug>rep"),
     fill = tm_vars(c("aug", "repl"),
                    multivariate = TRUE), id="hovertext",
               fill.scale = 
@@ -1580,6 +1630,102 @@ tm_shape(sq.ch %>% rename(aug = augmentBT_weightedbyemployees, repl = replaceBT_
   tm_view(set_view = c(-2.2,53.49326048352635,11))#centred on GM
 # tm_view(set_view = c(-1.598452,52.740283,8))
 # tm_view(bbox = "England")
+
+
+
+#ACTUALLY, just realised on these two scales below
+#We can't really directly compare - they're not comparable
+#The map above works because it's comparing within-category bins
+
+#What this would need to do: assign rank, then see where those ranks were
+#Just relative to manchester...
+#Let's do that
+
+#Let's repeat plots comparing these indices
+#Add in place flags
+sq.ch <- sq.ch %>% 
+  mutate(type = case_when(
+    la %in% gmlas ~ "GM LA",
+    la %in% corecities[!qg('manc',corecities)] ~ "core city (minus manc)",
+    .default = "other"
+  ),
+  is_GM = la %in% gmlas
+  )
+
+#Pick different measures to compare
+#Firm size already filtered above...
+
+#And rank across all of manc (rhyme!)
+#This is already filtered to just GM, so...
+sq.ch.forplot <- sq.ch %>%
+  st_set_geometry(NULL) %>% 
+  mutate(across(contains('BT_weightedbyemployees'), ~ rank(.), .names = '{.col}_rank')) %>% 
+  # select(la,contains('BT_weightedbyemployees')) %>% 
+  select(la,contains('_rank')) %>% 
+  pivot_longer(names_to = 'ranked_measure', values_to = 'value', cols = augmentBT_weightedbyemployees_rank:replaceBT_weightedbyemployees_rank)
+
+
+ggplot(sq.ch.forplot, 
+       aes(
+         x = value, 
+         y = fct_reorder(la,value), 
+         colour = ranked_measure,
+         shape  = ranked_measure
+       )) +
+  geom_point(size = 2, position = position_dodge(width = 0.4)) +
+  scale_color_brewer(palette = 'Dark2') +
+  scale_shape_manual(values = c(25,24)) +
+  geom_vline(xintercept = 0, colour = 'black', alpha = 0.5) +
+  xlab('aug and replace') +
+  ylab('') +
+  guides(size = F,alpha=F) 
+# theme(legend.title=element_blank())
+
+
+#That is not very informative! What are the mean ranks?
+sq.ch.forplot %>% 
+  group_by(la,ranked_measure) %>% 
+  summarise(meanrank = mean(value))
+
+#They seem awfully similar, but then maybe they are and the map is just doing better at seeing the patterns
+
+
+#Let's just compare the different AIE measures...
+ggplot(
+  hexsummary %>%
+    select(augmentmorethanreplaceprob_weightedbyemployees:replaceBT_weightedbyemployees,la) %>% 
+    pivot_longer(names_to = 'measure', values_to = 'value', cols = augmentBT_weightedbyemployees:replaceBT_weightedbyemployees),
+  aes(x = augmentmorethanreplaceprob_weightedbyemployees, y = value)) +
+    geom_point(size = 2) +
+    geom_smooth(method = 'lm') +
+    facet_wrap(~measure+la,scales='free')
+
+
+#And...
+ggplot(
+  hexsummary,
+  aes(x = augmentBT_weightedbyemployees, y = replaceBT_weightedbyemployees)) +
+  geom_point(size = 2) +
+  # geom_vline(xintercept = 0) +
+  # geom_hline(yintercept = 0) +
+  geom_smooth(method = 'lm') +
+  facet_wrap(~la,scales='free')
+
+#This is the one for the output
+#save data for it
+saveRDS(hexsummary,'local/data/hexsummary.rds')
+ggplot(
+  hexsummary,
+  aes(x = AIIE_weightedbyemployees, y = augmentmorethanreplaceprob_weightedbyemployees)) +
+  geom_point(size = 2) +
+  geom_vline(xintercept = 0) +
+  geom_hline(yintercept = 0.5) +
+  geom_smooth(method = 'lm') +
+  facet_wrap(~la,scales='free')
+
+
+
+
 
 
 

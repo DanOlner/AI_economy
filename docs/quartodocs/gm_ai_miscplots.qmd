@@ -22,6 +22,7 @@ library(nomisr)
 library(sf)
 library(tmap)
 library(ggridges)
+library(plotly)
 source('../../functions/helpers.R')
 source('../../functions/ad_hoc_functions.R')
 
@@ -33,14 +34,30 @@ theme_set(theme_light())
 #Get AIOE lookup
 soc_3dig_AIOE <- readRDS('../../data/UK_SOC_3digit_linkedAIOE.rds')
 
+#Get map data
+overlay <- readRDS('../../local/data/AIE4measures_hexoverlay.rds')
+sq <- readRDS('../../local/data/sq_forhexoverlay.rds')
+
+# itl2 <- st_read('../../../RegionalEcons_web/data/ITL_geographies/International_Territorial_Level_2_January_2021_UK_BFE_V2_2022_-4735199360818908762/ITL2_JAN_2021_UK_BFE_V2.shp',quiet = TRUE) %>% st_simplify(preserveTopology = T, dTolerance = 100) %>% 
+#   filter(qg('manchester',ITL221NM))
+# 
+# lad <- st_read("~/Dropbox/MapPolygons/UK/2024/Local_Authority_Districts_May_2024_Boundaries_UK_BFC/LAD_MAY_2024_UK_BFC.shp",quiet = TRUE) %>% st_simplify(preserveTopology = T, dTolerance = 100)
+
+#Blue peter'd those up just to GM
+itl2 <- readRDS('../../local/data/itl2_for_GM.rds')
+lad <- readRDS('../../local/data/las_for_GM.rds')
 
 ```
 
-# Maps and plots from linking Felten et al AI exposure index to UK data
+# Greater Manchester AI exposure, augmentability and replaceability
 
-Based on data from [Felten et al](https://sms.onlinelibrary.wiley.com/doi/full/10.1002/smj.3286) paper "Occupational, industry, and geographic exposure to artificial intelligence: A novel dataset and its potential uses" (2021). Original US data available [here](https://github.com/AIOE-Data/AIOE).
+The **first section** applies data from [Felten et al](https://sms.onlinelibrary.wiley.com/doi/full/10.1002/smj.3286){target="_blank"} paper "Occupational, industry, and geographic exposure to artificial intelligence: A novel dataset and its potential uses" (2021). Original US data available [here](https://github.com/AIOE-Data/AIOE){target="_blank"}.
 
-[To be done: explanation of link process. All code for that is [here](https://github.com/DanOlner/AI_economy/tree/main).]
+The **second section** presents results from a 'jobs replaceable versus augementable' analysis, looking at those separately as well as linking them to Felten's AIIE. 
+
+Both are linked to Companies House firm level data for Greater Manchester.
+
+[To be done: explanation of link process. All code for that is [here](https://github.com/DanOlner/AI_economy/tree/main){target="_blank"}.]
 
 ## Links to interactive maps
 
@@ -205,6 +222,328 @@ ggplot(msoa.aioe.avs %>% filter(type != 'other'),
 ```
 
 
+
+# Initial results for 'jobs/tasks augmentable' versus 'jobs/tasks replaceable'
+
+This section contains initial outputs from repeat LLM runs to extract probabilities for UK sectors having jobs/tasks that are (a) likely augmentable by AI; (b) likely replaceable by AI (running on a local instance of Llama 3.1).
+
+
+## AIIE vs augmentability
+
+This first plot does the following:
+
+* X axis: Felten's AI Industrial Exposure (AIIE). Higher values are more exposed 1000m hexes in Greater Manchester (as in the interactive maps above).
+* Y axis: "probability a job is more augmentable than replaceable (aug > replace)" within a sector (equivalent to complementarity index), applied to firms in Companies House.
+* Circle size is employee count per 1000m hex.
+* Broken down by Greater Manchester borough.
+
+Some things to note:
+
+* The same positive relationship seen in other results - more exposed jobs are on average also in more augmentable-jobs sectors
+* Bottom right quadrant is the "high exposure plus jobs more likely to be replaceable" hexes. There aren't many of these, though most boroughs have one or two (with central Manchester having the most jobs in this quadrant). Note though, this is a probability - so e.g. an augmentable value of 0.6 would still on average suggest 40% of jobs in that sector could be replaceable.
+
+
+```{r}
+#| fig-height: 13
+
+#Data for all firms with 1+ employees 
+hexsummary <- readRDS('../../local/data/hexsummary.rds')
+
+ggplot(
+  hexsummary %>% rename(AIIE = AIIE_weightedbyemployees, `aug > replace` = augmentmorethanreplaceprob_weightedbyemployees),
+  aes(x = AIIE, y = `aug > replace`, size = totalemployees)) +
+  geom_point(alpha = 0.5) +
+  scale_size(range = c(2,20)) +
+  geom_vline(xintercept = 0) +
+  geom_hline(yintercept = 0.5) +
+  # geom_smooth(method = 'lm') +
+  facet_wrap(~la,scales='free', ncol = 2)
+  # facet_wrap(~la)
+
+
+```
+
+
+## Bivariate hexmaps for AIIE vs "aug > replace"
+
+This and the next few plots are **bivariate maps** - each axis has three values of 'low / medium / high', making **nine possible combinations** of the two of them.
+
+These two maps:
+
+* Puts 'probability job is more augmentable than replaceable' **(aug>repl)** along one axis, with Felten's **AIIE** exposure index on the other. 
+* The first is for **firms with 1 to 3 employees**, the second for **firms with 4+ employees**.
+* Data for firms is summarised per 1000m hex (averages weighted by employee count and across any of the , as above).
+* Hexes are only shown if they have a **min of 10 employees in them**.
+
+So for example, in the map of firms with 1 to 3 employees:
+
+* The darkest hexes in the south of Greater Manchester are high aug>rep (highest probability of jobs being more augmentable than replaceable) and also high AIIE (they have most AI exposure).
+* There are only a few hexes with the legend's top left clear blue - high exposure but jobs more likely to be replaceable.
+* In both maps, there are large areas of high exposure with the middle aug>rep probability (jobs likely a mix of both augmentable and replaceable).
+
+
+### 1 to 3 employees
+
+```{r}
+
+hexsummary <- overlay %>% 
+  st_set_geometry(NULL) %>% 
+  # filter(Employees_thisyear > 0) %>% #Only firms with employees recorded in latest year
+  filter(between(Employees_thisyear,1,3)) %>% #Microfirms
+  # filter(between(Employees_thisyear,4,9)) %>% #Microfirms
+  # filter(Employees_thisyear > 9) %>% 
+  group_by(id) %>% 
+  summarise(
+    AIIE_weightedbyemployees = weighted.mean(AIIEfinal,Employees_thisyear),
+    augmentmorethanreplaceprob_weightedbyemployees = weighted.mean(augment_morethan_replace_prob,Employees_thisyear),
+    augmentBT_weightedbyemployees = weighted.mean(augment_logability_BT,Employees_thisyear),
+    replaceBT_weightedbyemployees = weighted.mean(replace_logability_BT,Employees_thisyear),
+    totalemployees = sum(Employees_thisyear),
+    totalfirms = n(),
+    la = max(localauthority_name)
+  ) %>% 
+  group_by(id) %>%
+  filter(sum(totalemployees) >= 10) %>% #keep only gridsquares where total employee count is more than / equal to 100
+  ungroup()
+
+#Link that back into the grid squares...
+#Use right join to drop empties
+sq.ch <- sq %>% 
+  right_join(
+    hexsummary,
+    by = 'id'
+  )
+
+tm_shape(sq.ch %>% rename(aug = augmentBT_weightedbyemployees, repl = replaceBT_weightedbyemployees, AIIE = AIIE_weightedbyemployees, `aug>rep` = augmentmorethanreplaceprob_weightedbyemployees)) +
+  tm_polygons(
+    fill = tm_vars(c("AIIE", "aug>rep"),
+    # fill = tm_vars(c("aug", "repl"),
+                   multivariate = TRUE),
+              fill.scale = 
+                tm_scale_bivariate(
+                  scale1 = tm_scale_intervals(style = "fisher", n = 3, labels = c("L", "M", "H")),
+                  scale2 = tm_scale_intervals(style = "fisher", n = 3, labels = c("L", "M", "H")),
+                  # values = "stevens.bluered")) +
+                  values = "bu_br_bivs")) +
+  tm_shape(lad) +
+  tm_borders(col = 'black', lwd = 1, fill_alpha = 0.3) +
+  tm_shape(itl2) +
+  tm_borders(col = 'black', lwd = 4) 
+
+
+```
+
+### 4+ employees
+
+```{r}
+
+hexsummary <- overlay %>% 
+  st_set_geometry(NULL) %>% 
+  # filter(Employees_thisyear > 0) %>% #Only firms with employees recorded in latest year
+  # filter(between(Employees_thisyear,1,3)) %>% #Microfirms
+  # filter(between(Employees_thisyear,4,9)) %>% #Microfirms
+  filter(Employees_thisyear > 4) %>%
+  group_by(id) %>% 
+  summarise(
+    AIIE_weightedbyemployees = weighted.mean(AIIEfinal,Employees_thisyear),
+    augmentmorethanreplaceprob_weightedbyemployees = weighted.mean(augment_morethan_replace_prob,Employees_thisyear),
+    augmentBT_weightedbyemployees = weighted.mean(augment_logability_BT,Employees_thisyear),
+    replaceBT_weightedbyemployees = weighted.mean(replace_logability_BT,Employees_thisyear),
+    totalemployees = sum(Employees_thisyear),
+    totalfirms = n(),
+    la = max(localauthority_name)
+  ) %>% 
+  group_by(id) %>%
+  filter(sum(totalemployees) >= 10) %>% #keep only gridsquares where total employee count is more than / equal to 100
+  ungroup()
+
+#Link that back into the grid squares...
+#Use right join to drop empties
+sq.ch <- sq %>% 
+  right_join(
+    hexsummary,
+    by = 'id'
+  )
+
+tm_shape(sq.ch %>% rename(aug = augmentBT_weightedbyemployees, repl = replaceBT_weightedbyemployees, AIIE = AIIE_weightedbyemployees, `aug>rep` = augmentmorethanreplaceprob_weightedbyemployees)) +
+  tm_polygons(
+    fill = tm_vars(c("AIIE", "aug>rep"),
+    # fill = tm_vars(c("aug", "repl"),
+                   multivariate = TRUE),
+              fill.scale = 
+                tm_scale_bivariate(
+                  scale1 = tm_scale_intervals(style = "fisher", n = 3, labels = c("L", "M", "H")),
+                  scale2 = tm_scale_intervals(style = "fisher", n = 3, labels = c("L", "M", "H")),
+                  # values = "stevens.bluered")) +
+                  values = "bu_br_bivs")) +
+  tm_shape(lad) +
+  tm_borders(col = 'black', lwd = 1, fill_alpha = 0.3) +
+  tm_shape(itl2) +
+  tm_borders(col = 'black', lwd = 4) 
+
+
+```
+
+
+
+
+# 'Augmentable' and 'replaceable' each on their own scale
+
+Here, two *separate* indices have been generated that each rank sectors as 'jobs more/less likely to be (1) replaceable and (2) augmentable in this sector compared to other sectors'.
+
+These two indices are made by 'competing' repeated sectors against each other (using the probabilities assigned from the LLM) and putting these pairwise outcomes into a [Bradley Terry](https://en.wikipedia.org/wiki/Bradley%E2%80%93Terry_model){target="_blank"} model to produce a 'sector x more likely to be augmentable than y' ranking. These are then mean-centred (keeping the relative log-likelihoods between sectors intact).
+
+
+
+## Where (270 3 digit SIC) sectors are located on the separate aug / replace axes
+
+This first interactive plot just shows those two scales on each axis to illustrate where the method places each sector - **hover for sector name**. 
+
+
+```{r}
+
+bt_trials_wsectors <- readRDS('../../local/data/bt_trials.rds')
+#bt_trials_wsectors <- readRDS('local/data/bt_trials.rds')
+
+p <- ggplot(bt_trials_wsectors,aes(x = replace, y = augment, label = SIC_3DIGIT_NAME)) +
+  geom_point(size = 3) +
+  geom_vline(xintercept = 0, colour = 'darkgrey') +
+  geom_hline(yintercept = 0, colour = 'darkgrey') 
+
+ggplotly(p, tooltip = 'label')
+
+
+
+
+```
+
+
+## Separate augment / replace hexmaps
+
+These maps put 'probability augmentable (high/medium/low)' and 'probability replaceable (high/medium/low)' on separate axes, again meaning there are nine possible values.
+
+As above, there is one map for 'firms with 1 to 3 employees' and a second for 'firms with 4+ employees'.
+
+Some comments on these two maps:
+
+* There's an obvious stark difference for 1-3 employee vs 4+ employee firms - for 1-3s, there are large areas with lower augmentable and medium to high replacable.
+* Though there's a cluster (matching the one above for aug>repl vs AIIE) that's low replaceable / medium augmentable (which fits with 'prob aug is more than prob replace' but here we can get a better idea of the actual scale of both).
+* The 4+ map has a lot more hexes in the max category for *both* aug and replace.
+
+
+### Firms with 1 to 3 employees
+
+```{r}
+
+hexsummary <- overlay %>% 
+  st_set_geometry(NULL) %>% 
+  # filter(Employees_thisyear > 0) %>% #Only firms with employees recorded in latest year
+  filter(between(Employees_thisyear,1,3)) %>% #Microfirms
+  # filter(between(Employees_thisyear,4,9)) %>% #Microfirms
+  # filter(Employees_thisyear > 4) %>%
+  group_by(id) %>% 
+  summarise(
+    AIIE_weightedbyemployees = weighted.mean(AIIEfinal,Employees_thisyear),
+    augmentmorethanreplaceprob_weightedbyemployees = weighted.mean(augment_morethan_replace_prob,Employees_thisyear),
+    augmentBT_weightedbyemployees = weighted.mean(augment_logability_BT,Employees_thisyear),
+    replaceBT_weightedbyemployees = weighted.mean(replace_logability_BT,Employees_thisyear),
+    totalemployees = sum(Employees_thisyear),
+    totalfirms = n(),
+    la = max(localauthority_name)
+  ) %>% 
+  group_by(id) %>%
+  filter(sum(totalemployees) >= 10) %>% #keep only gridsquares where total employee count is more than / equal to 100
+  ungroup()
+
+#Link that back into the grid squares...
+#Use right join to drop empties
+sq.ch <- sq %>% 
+  right_join(
+    hexsummary,
+    by = 'id'
+  )
+
+tm_shape(sq.ch %>% rename(aug = augmentBT_weightedbyemployees, repl = replaceBT_weightedbyemployees, AIIE = AIIE_weightedbyemployees, `aug>rep` = augmentmorethanreplaceprob_weightedbyemployees)) +
+  tm_polygons(
+    # fill = tm_vars(c("AIIE", "aug>rep"),
+    fill = tm_vars(c("aug", "repl"),
+                   multivariate = TRUE),
+              fill.scale = 
+                tm_scale_bivariate(
+                  scale1 = tm_scale_intervals(style = "fisher", n = 3, labels = c("L", "M", "H")),
+                  scale2 = tm_scale_intervals(style = "fisher", n = 3, labels = c("L", "M", "H")),
+                  # values = "stevens.bluered")) +
+                  values = "bu_br_bivs")) +
+  tm_shape(lad) +
+  tm_borders(col = 'black', lwd = 1, fill_alpha = 0.3) +
+  tm_shape(itl2) +
+  tm_borders(col = 'black', lwd = 4) 
+
+
+```
+
+
+
+### Firms with 4+ employees
+
+```{r}
+
+hexsummary <- overlay %>% 
+  st_set_geometry(NULL) %>% 
+  # filter(Employees_thisyear > 0) %>% #Only firms with employees recorded in latest year
+  # filter(between(Employees_thisyear,1,3)) %>% #Microfirms
+  # filter(between(Employees_thisyear,4,9)) %>% #Microfirms
+  filter(Employees_thisyear > 4) %>%
+  group_by(id) %>% 
+  summarise(
+    AIIE_weightedbyemployees = weighted.mean(AIIEfinal,Employees_thisyear),
+    augmentmorethanreplaceprob_weightedbyemployees = weighted.mean(augment_morethan_replace_prob,Employees_thisyear),
+    augmentBT_weightedbyemployees = weighted.mean(augment_logability_BT,Employees_thisyear),
+    replaceBT_weightedbyemployees = weighted.mean(replace_logability_BT,Employees_thisyear),
+    totalemployees = sum(Employees_thisyear),
+    totalfirms = n(),
+    la = max(localauthority_name)
+  ) %>% 
+  group_by(id) %>%
+  filter(sum(totalemployees) >= 10) %>% #keep only gridsquares where total employee count is more than / equal to 100
+  ungroup()
+
+#Link that back into the grid squares...
+#Use right join to drop empties
+sq.ch <- sq %>% 
+  right_join(
+    hexsummary,
+    by = 'id'
+  )
+
+tm_shape(sq.ch %>% rename(aug = augmentBT_weightedbyemployees, repl = replaceBT_weightedbyemployees, AIIE = AIIE_weightedbyemployees, `aug>rep` = augmentmorethanreplaceprob_weightedbyemployees)) +
+  tm_polygons(
+    # fill = tm_vars(c("AIIE", "aug>rep"),
+    fill = tm_vars(c("aug", "repl"),
+                   multivariate = TRUE),
+              fill.scale = 
+                tm_scale_bivariate(
+                  scale1 = tm_scale_intervals(style = "fisher", n = 3, labels = c("L", "M", "H")),
+                  scale2 = tm_scale_intervals(style = "fisher", n = 3, labels = c("L", "M", "H")),
+                  # values = "stevens.bluered")) +
+                  values = "bu_br_bivs")) +
+  tm_shape(lad) +
+  tm_borders(col = 'black', lwd = 1, fill_alpha = 0.3) +
+  tm_shape(itl2) +
+  tm_borders(col = 'black', lwd = 4) 
+
+
+```
+
+
+
+
+
+
+
+
+# Extra bits
+
 ## Same AIOE occupation exposure data, but just at local authority level
 
 I've included this just to make a quick point. This is the same data as the last plot, but with weighted mean and standard deviation applied at the local authority level. 
@@ -278,37 +617,3 @@ ggplot(la.aioe.avs %>% filter(type != 'other'),
 
 
 ```
-
-
-
-
-
-```{r eval=F}
-
-## Companies house AIIE by employee similarly spread
-
-#Density of AI Industry Exposure for indidivual employees in Companies House data for GM local authorities. Similar patterns but different points for peaks in different places (e.g. Manchester AIIE high values are higher peaks).
-
-
-gm_byemployee <- readRDS('../../local/data/gm_ch_byemployee.rds')
-
-#https://cran.r-project.org/web/packages/ggridges/vignettes/gallery.html
-ggplot(gm_byemployee, 
-       aes(x = AIIEfinal, y = fct_reorder(localauthority_name,AIIEfinal), group = fct_reorder(localauthority_name,AIIEfinal))) +
-  geom_density_ridges(scale = 1.5, linewidth = 0.25, rel_min_height = 0.03, alpha = 1) +
-  theme_ridges() +
-  # scale_x_continuous(limits = c(1, 200), expand = c(0, 0)) +
-  # scale_y_reverse(
-  #   breaks = c(2000, 1980, 1960, 1940, 1920, 1900),
-  #   expand = c(0, 0)
-  xlab('AIIE') +
-  ylab('') +
-  coord_cartesian(clip = "off")
-
-
-
-
-```
-
-
-
