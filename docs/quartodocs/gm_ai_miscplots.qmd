@@ -19,6 +19,7 @@ collapse: false
 ```{r setup}
 library(tidyverse)
 library(nomisr)
+library(ggrepel)
 library(sf)
 library(tmap)
 library(ggridges)
@@ -534,6 +535,176 @@ tm_shape(sq.ch %>% rename(aug = augmentBT_weightedbyemployees, repl = replaceBT_
 
 
 ```
+
+
+
+# Greater Manchester boroughs compared to rest of GB local authorities
+
+Local-authority-level means for the different measures (firm level, weighted by employee number), and broken down by firms with 1 to 3 employees versus 4+ employees.
+
+Things to note:
+
+* For exposure versus "probability jobs are more augmentable than replaceable", the pattern for 1-3 employee sized firms versus 4+ stands out. Micro firms in GM appear to be more augmentable as they become more exposed; the slope is reversed for 4+ sized firms, where higher exposure correlates to more likely replaceable jobs. That slope goes against the general slope for other local authorities.
+* AIIE vs aug>repl for 1-3 sized firms in GM is a similar slope to other places but **on average** tracking lower, suggesting slightly lower mean augmentability.
+* Aug v replace on separate axes is generally more varied across GB, and GM boroughs are positioned all over that map for micro-firms. 
+* Though for 4+ size firms in GM, separate aug/replace appears to tell a different story to above for 1-3 sized - the final plot suggests the augment slope is to the right of GB on average, so GM boroughs have a slightly higher probability of augmentable than replaceable jobs overall for 4+ firms. 
+
+## For firms with 1 to 3 employees
+
+### AIIE vs "probability aug > replace"
+
+```{r}
+LAsummary <- readRDS('../../local/data/LAsummary_1to3employees_4_AI_measures_weightedmeans.rds')
+
+
+#AIIE vs aug>repl
+#"Set labels to the empty string "" to hide them. All data points repel the non-empty labels."
+#(Reason to not just add separately.)
+#https://ggrepel.slowkow.com/articles/examples.html
+p <- ggplot(LAsummary %>% 
+              mutate(
+                is_gm = localauthority_name %in% gmlas,
+                label = ifelse(is_gm, str_sub(localauthority_name,1,4), "")
+              ),
+            aes(
+              # x = AIIEfinal_weightedmean, y = replace_logability_BT_weightedmean, 
+              # x = augment_logability_BT_weightedmean, y = augment_morethan_replace_prob_weightedmean, 
+              # x = augment_logability_BT_weightedmean, y = replace_logability_BT_weightedmean, 
+              x = AIIEfinal_weightedmean, y = augment_morethan_replace_prob_weightedmean,
+              colour = is_gm, size = is_gm, label =  label, text = localauthority_name, group = is_gm)
+) +
+  geom_point() +
+  geom_text_repel(
+    size = 5,
+    max.overlaps = Inf,
+    box.padding = 1
+  ) +
+  geom_smooth(method = 'lm', size = 1, alpha = 0.2) +
+  # geom_text(hjust = 'left') +
+  geom_vline(xintercept = 0) +
+  guides(size = F, colour = F) +
+  xlab("AIIE") +
+  ylab("Prob augment > replace")
+  # geom_hline(yintercept = 0.5)
+
+p
+```
+
+### Augment v replace separately
+
+```{r}
+#Aug and repl separately
+p <- ggplot(LAsummary %>% 
+         mutate(
+           is_gm = localauthority_name %in% gmlas,
+           label = ifelse(is_gm, str_sub(localauthority_name,1,4), "")
+           ),
+       aes(
+         # x = AIIEfinal_weightedmean, y = replace_logability_BT_weightedmean, 
+         # x = augment_logability_BT_weightedmean, y = augment_morethan_replace_prob_weightedmean, 
+         x = augment_logability_BT_weightedmean, y = replace_logability_BT_weightedmean, 
+         # x = AIIEfinal_weightedmean, y = augment_morethan_replace_prob_weightedmean, 
+         colour = is_gm, size = is_gm, label =  label, text = localauthority_name, group = is_gm)
+       ) +
+  geom_point() +
+  geom_text_repel(
+    size = 5,
+    max.overlaps = Inf,
+    box.padding = 1
+    ) +
+  # geom_text(hjust = 'left') +
+  geom_smooth(method = 'lm', size = 1, alpha = 0.2) +
+  geom_vline(xintercept = 0) +
+  geom_hline(yintercept = 0) +
+  guides(size = F, colour = F) +
+  xlab("Augment") +
+  ylab("Replace")
+  
+p
+
+
+```
+
+
+
+## For firms with 4+ employees
+
+
+### AIIE vs "probability aug > replace"
+
+```{r}
+
+LAsummary <- readRDS('../../local/data/LAsummary_4plus_employees_4_AI_measures_weightedmeans.rds')
+
+#AIIE vs aug>repl
+#"Set labels to the empty string "" to hide them. All data points repel the non-empty labels."
+#(Reason to not just add separately.)
+#https://ggrepel.slowkow.com/articles/examples.html
+p <- ggplot(LAsummary %>% 
+              mutate(
+                is_gm = localauthority_name %in% gmlas,
+                label = ifelse(is_gm, str_sub(localauthority_name,1,4), "")
+              ),
+            aes(
+              # x = AIIEfinal_weightedmean, y = replace_logability_BT_weightedmean, 
+              # x = augment_logability_BT_weightedmean, y = augment_morethan_replace_prob_weightedmean, 
+              # x = augment_logability_BT_weightedmean, y = replace_logability_BT_weightedmean, 
+              x = AIIEfinal_weightedmean, y = augment_morethan_replace_prob_weightedmean,
+              colour = is_gm, size = is_gm, label =  label, text = localauthority_name, group = is_gm)
+) +
+  geom_point() +
+  geom_text_repel(
+    size = 5,
+    max.overlaps = Inf,
+    box.padding = 1
+  ) +
+  # geom_text(hjust = 'left') +
+  geom_smooth(method = 'lm', size = 1, alpha = 0.2) +
+  geom_vline(xintercept = 0)  +
+  guides(size = F, colour = F) +
+  xlab("AIIE") +
+  ylab("Prob augment > replace")
+  # geom_hline(yintercept = 0.5)
+
+p
+```
+
+### Augment v replace separately
+
+```{r}
+#Aug and repl separately
+p <- ggplot(LAsummary %>% 
+         mutate(
+           is_gm = localauthority_name %in% gmlas,
+           label = ifelse(is_gm, str_sub(localauthority_name,1,4), "")
+           ),
+       aes(
+         # x = AIIEfinal_weightedmean, y = replace_logability_BT_weightedmean, 
+         # x = augment_logability_BT_weightedmean, y = augment_morethan_replace_prob_weightedmean, 
+         x = augment_logability_BT_weightedmean, y = replace_logability_BT_weightedmean, 
+         # x = AIIEfinal_weightedmean, y = augment_morethan_replace_prob_weightedmean, 
+         colour = is_gm, size = is_gm, label =  label, text = localauthority_name, group = is_gm)
+       ) +
+  geom_point() +
+  geom_text_repel(
+    size = 5,
+    max.overlaps = Inf,
+    box.padding = 1
+    ) +
+  geom_smooth(method = 'lm', size = 1, alpha = 0.2) +
+  # geom_text(hjust = 'left') +
+  geom_vline(xintercept = 0) +
+  geom_hline(yintercept = 0) +
+  guides(size = F, colour = F) +
+  xlab("Augment") +
+  ylab("Replace")
+  
+p
+
+
+```
+
+
 
 
 

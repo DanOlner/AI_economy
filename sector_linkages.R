@@ -1,11 +1,13 @@
 #Exploring sector links
 library(tidyverse)
 library(plotly)
+library(ggrepel)
 library(nomisr)
 library(sf)
 library(tmap)
 library(ggridges)
 library(BradleyTerry2)
+library(patchwork)
 source('functions/helpers.R')
 source('functions/ad_hoc_functions.R')
 
@@ -1714,6 +1716,8 @@ ggplot(
 #This is the one for the output
 #save data for it
 saveRDS(hexsummary,'local/data/hexsummary.rds')
+#hexsummary <- readRDS('local/data/hexsummary.rds')
+
 ggplot(
   hexsummary,
   aes(x = AIIE_weightedbyemployees, y = augmentmorethanreplaceprob_weightedbyemployees)) +
@@ -1727,14 +1731,210 @@ ggplot(
 
 
 
+# SOME BOROUGH LEVEL SUMMARY STATS----
+
+ch <- readRDS('local/data/ch_with_4AIE_measures.rds')
+
+#What I'm after here: some way to show what mix of sectors or clusters characterise boroughs that have certain mixes
+#Some basic digging first just to remind myself of things and stuff
+#All we need are some fairly simple summary stats to begin with...
+
+
+#We can just get employee weighted means and SDs for the different measures at borough level
+
+#From 781 above
+corecities <- getdistinct('sheffield|Belfast|Birmingham|Bristol|Cardiff|Glasgow|Leeds|Liverpool|Manchester|Tyne|Nottingham', unique(ch$localauthority_name))
+
+#Yes, all in there, need to remove a few...
+corecities <- corecities[!grepl(x = corecities, pattern = 'Greater|shire|side', ignore.case = T)]
+corecities <- corecities[order(corecities)]
+
+#Check match also works in hours worked... tick
+# table(corecities %in% hoursworked$Region_name)
 
 
 
+#Find LA level summaries...
+#Hmisc can do weighted variance
+# LAsummary <- ch %>% 
+#   st_set_geometry(NULL) %>% 
+#   filter(Employees_thisyear > 0) %>% #Only firms with employees recorded in latest year
+#   group_by(localauthority_name) %>% 
+#   summarise(
+#     AIIE_weightedbyemployees = weighted.mean(AIIEfinal,Employees_thisyear),
+#     AIIE_SD_weightedbyemployees = sqrt(Hmisc::wtd.var(AIIEfinal,Employees_thisyear)),
+#     AIIE_weightedbyemployees = weighted.mean(AIIEfinal,Employees_thisyear),
+#     AIIE_SD_weightedbyemployees = sqrt(Hmisc::wtd.var(AIIEfinal,Employees_thisyear)),
+#     totalemployees = sum(Employees_thisyear)
+#   ) %>% ungroup()
+
+
+LAsummary.means <- ch %>% 
+  st_set_geometry(NULL) %>% 
+  # filter(between(Employees_thisyear,1,3)) %>% #Only firms with employees recorded in latest year
+  filter(Employees_thisyear > 3) %>% #Only firms with employees recorded in latest year
+  group_by(localauthority_name) %>% 
+  summarise(
+    across(c(augment_morethan_replace_prob,AIIEfinal,replace_logability_BT,augment_logability_BT), 
+           ~weighted.mean(.,Employees_thisyear),
+           .names = "{.col}_weightedmean")
+  ) %>% ungroup()
+
+LAsummary.sds <- ch %>% 
+  st_set_geometry(NULL) %>% 
+  filter(between(Employees_thisyear,1,3)) %>% #Only firms with employees recorded in latest year
+  # filter(Employees_thisyear > 0) %>% #Only firms with employees recorded in latest year
+  group_by(localauthority_name) %>% 
+  summarise(
+    across(c(augment_morethan_replace_prob,AIIEfinal,replace_logability_BT,augment_logability_BT), 
+           ~sqrt(Hmisc::wtd.var(.,Employees_thisyear)),
+           .names = "{.col}_weightedsd")
+    # totalemployees = sum(Employees_thisyear)
+  ) %>% ungroup()
+
+#Join both
+LAsummary <- LAsummary.means %>% 
+  left_join(LAsummary.sds, by = 'localauthority_name') 
+
+#Save for use in output
+# saveRDS(LAsummary,'local/data/LAsummary_1to3employees_4_AI_measures_weightedmeans.rds')
+saveRDS(LAsummary,'local/data/LAsummary_4plus_employees_4_AI_measures_weightedmeans.rds')
 
 
 
+#Now it's a more manageable size
+#Make the variable columns long, so we can group and add in error bars more easily
+LAsummary.long <- LAsummary %>% 
+  pivot_longer(
+    cols = -localauthority_name,
+    names_to = c("measure", ".value"),
+    names_pattern = "^(.*)_(weightedmean|weightedsd)$"
+  ) %>%
+  #nicer ordering
+  select(localauthority_name, measure, weightedmean, weightedsd) %>% 
+  mutate(type = case_when(
+    localauthority_name %in% unique(ch$localauthority_name[ch$ITL221NM == 'Greater Manchester']) ~ "GM LA",
+    localauthority_name %in% corecities[!qg('manc',corecities)] ~ "core city (minus manc)",
+    .default = "other"
+  )) %>% 
+  mutate(
+    is_GM = localauthority_name %in% unique(ch$localauthority_name[ch$ITL221NM == 'Greater Manchester']),
+    xmin = weightedmean - (weightedsd),
+    xmax = weightedmean + (weightedsd)
+  )
 
 
+
+#OK, what we got? Let's look at all / stick SDs on
+# ggplot(LAsummary.long %>% filter(type != 'other'), 
+#        aes(
+#          x = weightedmean, 
+#          y = fct_reorder(localauthority_name,weightedmean), 
+#          colour = type, 
+#          size = is_GM)) +
+#   geom_point(size = 3) +
+#   geom_errorbar(aes(xmin = xmin, xmax = xmax), width = 0.1) +
+#   scale_size_manual(values = c(0.5,1)) +
+#   # scale_colour_manual(values = c('blue','green','black')) +
+#   scale_color_brewer(palette = 'Dark2') +
+#   # geom_vline(xintercept = 0, colour = 'black', alpha = 0.5) +
+#   xlab(' -- ') +
+#   facet_wrap(~measure)
+
+
+#Nah - needs doing for each separately to get correct order
+makemeasureplot <- function(measurename,vlinecentre = 0){
+  
+  ggplot(LAsummary.long %>% filter(type != 'other', measure == measurename), 
+         aes(
+           x = weightedmean, 
+           y = fct_reorder(localauthority_name,weightedmean), 
+           colour = type, 
+           size = is_GM)) +
+    geom_point(size = 3) +
+    geom_errorbar(aes(xmin = xmin, xmax = xmax), width = 0.1) +
+    scale_size_manual(values = c(0.5,1)) +
+    # scale_colour_manual(values = c('blue','green','black')) +
+    scale_color_brewer(palette = 'Dark2') +
+    geom_vline(xintercept = vlinecentre, colour = 'black', alpha = 0.5) +
+    xlab(' -- ') 
+  
+}
+
+makemeasureplot('AIIEfinal')
+
+plotz <- map2(unique(LAsummary.long$measure),c(0.5,0,0,0), ~makemeasureplot(.x,.y))
+
+wrap_plots(plotz)
+
+
+#Let's look at pair plots of both for the means
+# pairs(LAsummary %>% select(contains('mean')))
+
+# pairs(
+#   LAsummary %>%
+#     filter(localauthority_name %in% unique(ch$localauthority_name[ch$ITL221NM == 'Greater Manchester'])) %>% 
+#     select(contains('mean')), add = T, colour = 'red'
+#   )
+
+
+
+#"Set labels to the empty string "" to hide them. All data points repel the non-empty labels."
+#(Reason to not just add separately.)
+#https://ggrepel.slowkow.com/articles/examples.html
+p <- ggplot(LAsummary %>% 
+         mutate(
+           is_gm = localauthority_name %in% unique(ch$localauthority_name[ch$ITL221NM == 'Greater Manchester']),
+           label = ifelse(is_gm, str_sub(localauthority_name,1,4), "")
+           ),
+       aes(
+         # x = AIIEfinal_weightedmean, y = replace_logability_BT_weightedmean, 
+         # x = augment_logability_BT_weightedmean, y = augment_morethan_replace_prob_weightedmean, 
+         x = augment_logability_BT_weightedmean, y = replace_logability_BT_weightedmean, 
+         # x = AIIEfinal_weightedmean, y = augment_morethan_replace_prob_weightedmean, 
+         colour = is_gm, size = is_gm, label =  label, text = localauthority_name)
+       ) +
+  geom_point() +
+  geom_text_repel(
+    size = 5,
+    max.overlaps = Inf,
+    box.padding = 1
+    ) +
+  # geom_text(hjust = 'left') +
+  geom_vline(xintercept = 0) +
+  geom_hline(yintercept = 0)
+  
+p
+
+# ggplotly(p, tooltip = 'text')
+
+
+#Repeat for AIIE vs aug>repl
+p <- ggplot(LAsummary %>% 
+              mutate(
+                is_gm = localauthority_name %in% unique(ch$localauthority_name[ch$ITL221NM == 'Greater Manchester']),
+                label = ifelse(is_gm, str_sub(localauthority_name,1,4), "")
+              ),
+            aes(
+              # x = AIIEfinal_weightedmean, y = replace_logability_BT_weightedmean, 
+              # x = augment_logability_BT_weightedmean, y = augment_morethan_replace_prob_weightedmean, 
+              # x = augment_logability_BT_weightedmean, y = replace_logability_BT_weightedmean, 
+              x = AIIEfinal_weightedmean, y = augment_morethan_replace_prob_weightedmean,
+              colour = is_gm, size = is_gm, label =  label, text = localauthority_name)
+) +
+  geom_point() +
+  geom_text_repel(
+    size = 5,
+    max.overlaps = Inf,
+    box.padding = 1
+  ) +
+  # geom_text(hjust = 'left') +
+  geom_vline(xintercept = 0) 
+  # geom_hline(yintercept = 0.5)
+
+p
+
+ggplotly(p, tooltip = 'text')
 
 
 
