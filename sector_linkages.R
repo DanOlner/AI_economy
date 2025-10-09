@@ -1938,4 +1938,320 @@ ggplotly(p, tooltip = 'text')
 
 
 
+# TEST JOB RANKING / DECILES----
+
+# I want e.g. per borough: "percent of jobs in highest decile of x measure"
+#But each job is in a firm
+#Let's check ways to lay out and rank jobs
+#Could use weighted ranking but just as easy to make new vector with jobs repeated
+#So let's get the basics
+
+#Note total number of jobs, so there'll be one row each for these if done this way
+#9.6 million
+ch$Employees_thisyear[ch$Employees_thisyear > 0] %>% sum(na.rm = T)
+
+#Or... let's try a weighted ranking package
+#https://www.rdocumentation.org/packages/cNORM/versions/2.0.2/topics/weighted.rank
+library(cNORM)
+
+valuestorank <- ch %>% 
+  st_set_geometry(NULL) %>% 
+  select(localauthority_name,Employees_thisyear,ITL221NM,augment_morethan_replace_prob,AIIEfinal,replace_logability_BT,augment_logability_BT) %>% 
+  filter(Employees_thisyear >= 1) %>% 
+  # mutate(Employees_thisyear = round(Employees_thisyear,0)) %>% #some are not!
+  mutate(Employees_thisyear = as.integer(Employees_thisyear))#some are not!
+
+#!!!
+# sd(valuestorank$Employees_thisyear %% 1)
+
+# valuestorank <- valuestorank %>% 
+#   mutate(
+#     across(augment_morethan_replace_prob:augment_logability_BT, ~weighted.rank(.x, weights = Employees_thisyear), .names = "rank_{.col}")
+#   )
+
+#Test on single run
+# x <- weighted.rank(valuestorank$AIIEfinal,valuestorank$Employees_thisyear)
+
+#The above is slow. I think maybe making long then ranking might be the better option. Let's see.
+reps <- valuestorank %>% 
+  select(
+    localauthority_name,Employees_thisyear,AIIEfinal
+  ) %>% 
+  uncount(Employees_thisyear,.remove = F)
+
+#Ah, faster! OK, so...
+#Will all be same length cos same employees
+uncountcol <- function(colname){
+  
+  colname = enquo(colname)
+  
+  valuestorank %>% 
+    select(
+      localauthority_name,Employees_thisyear,!!colname
+    ) %>% 
+    uncount(Employees_thisyear,.remove = F)
+  
+}
+
+#Prob a neater way to do this, but...
+x <- uncountcol(AIIEfinal)
+
+jobuncounts <- bind_cols(
+  list(
+    x,
+    uncountcol(augment_morethan_replace_prob) %>% select(augment_morethan_replace_prob),
+    uncountcol(replace_logability_BT) %>% select(replace_logability_BT),
+    uncountcol(augment_logability_BT) %>% select(augment_logability_BT)
+  )
+)
+
+#One value per job, can now find ranks then deciles
+#Don't need orig values at this point
+jobuncounts <- jobuncounts %>% 
+  mutate(across(AIIEfinal:augment_logability_BT, rank))
+
+#And then deciles by splitting into even groups
+deciles <- jobuncounts %>% 
+  mutate(across(AIIEfinal:augment_logability_BT, ~cut_number(., 10) %>% as.numeric))
+
+
+#Test version that keeps all numbers so I can sanity check what decile 1 and 10 actually mean!
+#Decile 10 is highest values, decile 1 is lowest. Huzzah!
+x <- uncountcol(AIIEfinal)
+
+jobuncounts.test <- bind_cols(
+  list(
+    x,
+    uncountcol(augment_morethan_replace_prob) %>% select(augment_morethan_replace_prob),
+    uncountcol(replace_logability_BT) %>% select(replace_logability_BT),
+    uncountcol(augment_logability_BT) %>% select(augment_logability_BT)
+  )
+)
+
+jobuncounts.test <- jobuncounts.test %>% 
+  mutate(across(AIIEfinal:augment_logability_BT, rank, .names = "rank_{.col}"))
+
+deciles.test <- jobuncounts.test %>% 
+  mutate(across(AIIEfinal:augment_logability_BT, ~cut_number(., 10) %>% as.numeric,  .names = "decile_{.col}"))
+
+
+
+
+#Right! Can now do "percent of jobs per LA in top / bottom decile or quintile"
+# percent_topdecile <- deciles %>% 
+#   group_by(localauthority_name) %>% 
+#   summarise(
+#     percent_topdecile = (sum(AIIEfinal == 10)/n()) * 100
+#   )
+
+#Do for each measure
+percent_topdecile <- deciles %>% 
+  group_by(localauthority_name) %>% 
+  summarise(
+    across(AIIEfinal:augment_logability_BT,
+    ~((sum(. == 10)/n()) * 100) %>% round(2)
+    # .names = 'percent_topdecile_{.col}'
+    )
+  )
+
+#Mark up gmla and plot
+percent_topdecile <- percent_topdecile %>% 
+  mutate(
+    gmla = localauthority_name %in% readRDS('data/gmlas.rds')
+  )
+
+percent_bottomdecile <- deciles %>% 
+  group_by(localauthority_name) %>% 
+  summarise(
+    across(AIIEfinal:augment_logability_BT,
+    ~((sum(. == 1)/n()) * 100) %>% round(2)
+    # .names = 'percent_topdecile_{.col}'
+    )
+  )
+
+#Mark up gmla and plot
+percent_bottomdecile <- percent_bottomdecile %>% 
+  mutate(
+    gmla = localauthority_name %in% readRDS('data/gmlas.rds')
+  )
+
+
+
+
+
+percent_topdecile_long <- percent_topdecile %>% 
+  pivot_longer(AIIEfinal:augment_logability_BT, names_to = 'measure', values_to = 'percent_topdecile')
+
+#Abbr names
+percent_topdecile_long <- percent_topdecile_long %>% 
+  mutate(
+    labels = str_sub(localauthority_name,1,3) %>% tolower(),
+    labels = ifelse(gmla,labels,"")#ggrepel will leave empty strings blank
+  )
+
+# table(percent_topdecile_long$labels)
+
+#Add GMLA over top for better view
+ggplot() +
+  geom_jitter(
+    data = percent_topdecile_long %>% filter(!gmla),
+    aes(y = measure, x = percent_topdecile),
+    colour = 'grey',
+    height = 0.1
+    ) +
+  geom_jitter(
+    data = percent_topdecile_long %>% filter(gmla),
+    aes(y = measure, x = percent_topdecile),
+    colour = 'blue', size = 3,
+    height = 0.05
+    ) +
+  geom_text_repel(
+    data = percent_topdecile_long %>% filter(gmla),
+    mapping = aes(label = labels, y = measure, x = percent_topdecile),
+    max.overlaps = Inf,
+    box.padding = 1
+  )
+
+
+#Might be better on separate axes
+percent_topdecile <- percent_topdecile %>% 
+  mutate(
+    labels = str_sub(localauthority_name,1,3) %>% tolower(),
+    labels = ifelse(gmla,labels,"")#ggrepel will leave empty strings blank
+  )
+
+percent_bottomdecile <- percent_bottomdecile %>% 
+  mutate(
+    labels = str_sub(localauthority_name,1,3) %>% tolower(),
+    labels = ifelse(gmla,labels,"")#ggrepel will leave empty strings blank
+  )
+
+
+saveRDS(percent_topdecile, 'local/data/percentjobs_topdecile.rds')
+
+ggplot() +
+  geom_point(
+    data = percent_topdecile %>% filter(!gmla),
+    aes(y = augment_morethan_replace_prob, x = AIIEfinal),
+    # colour = 'grey'
+    alpha = 0.25
+    ) +
+  geom_point(
+    data = percent_topdecile %>% filter(gmla),
+    aes(y = augment_morethan_replace_prob, x = AIIEfinal),
+    colour = 'blue', size = 3
+    ) +
+  geom_text_repel(
+    data = percent_topdecile %>% filter(gmla),
+    mapping = aes(label = labels, y = augment_morethan_replace_prob, x = AIIEfinal),
+    max.overlaps = Inf,
+    box.padding = 1
+  ) +
+  coord_cartesian(xlim = c(0,20), ylim = c(5,15)) +
+  xlab('% of jobs in GB top AIIE decile') +
+  ylab('% of jobs in GB top aug > replace decile') +
+  geom_vline(xintercept = 10, alpha = 0.5, colour  = '#7c9724') +
+  geom_hline(yintercept = 10, alpha = 0.5, colour  = '#7c9724') 
+
+
+ggplot() +
+  geom_point(
+    data = percent_topdecile %>% filter(!gmla),
+    aes(y = replace_logability_BT, x = augment_logability_BT),
+    colour = 'grey'
+    ) +
+  geom_point(
+    data = percent_topdecile %>% filter(gmla),
+    aes(y = replace_logability_BT, x = augment_logability_BT),
+    colour = 'blue', size = 3
+    ) +
+  geom_text_repel(
+    data = percent_topdecile %>% filter(gmla),
+    mapping = aes(label = labels, y = replace_logability_BT, x = augment_logability_BT),
+    max.overlaps = Inf,
+    box.padding = 1
+  ) +
+  coord_cartesian(xlim = c(3,20), ylim = c(5,15)) +
+  xlab('% of jobs in GB top most augmentable decile') +
+  ylab('% of jobs in GB top most replaceable decile') +
+  geom_vline(xintercept = 10, alpha = 0.5, colour  = '#7c9724') +
+  geom_hline(yintercept = 10, alpha = 0.5, colour  = '#7c9724') 
+  
+
+
+#Mixed version - top AIIE decile but bottom aug>replace decile
+#To get most exposed but most replaceable
+mixed <- percent_topdecile %>% 
+  select(localauthority_name,AIIE_topdecile = AIIEfinal, gmla, labels) %>% 
+  left_join(
+    percent_bottomdecile %>% select(localauthority_name,augment_morethan_replace_prob_bottomdecile = augment_morethan_replace_prob),
+    by = 'localauthority_name'
+  )
+
+ggplot() +
+  geom_point(
+    data = mixed %>% filter(!gmla),
+    aes(y = augment_morethan_replace_prob_bottomdecile, x = AIIE_topdecile),
+    # colour = 'grey'
+    alpha = 0.25
+  ) +
+  geom_point(
+    data = mixed %>% filter(gmla),
+    aes(y = augment_morethan_replace_prob_bottomdecile, x = AIIE_topdecile),
+    colour = 'blue', size = 3
+  ) +
+  geom_text_repel(
+    data = mixed %>% filter(gmla),
+    mapping = aes(label = labels, y = augment_morethan_replace_prob_bottomdecile, x = AIIE_topdecile),
+    max.overlaps = Inf,
+    box.padding = 1
+  ) +
+  coord_cartesian(xlim = c(0,20), ylim = c(5,15)) +
+  xlab('% of jobs in GB TOP AIIE decile') +
+  ylab('% of jobs in GB BOTTOM aug > replace decile') +
+  geom_vline(xintercept = 10, alpha = 0.5, colour  = '#7c9724') +
+  geom_hline(yintercept = 10, alpha = 0.5, colour  = '#7c9724') 
+
+
+
+# LINK WORKPLACE AND HOME OCCUPATIONS ACROSS GM LAS----
+
+#This data all loaded in via the gm_ai_miscplots.qmd file
+#Point: compare MSOAs along Felten AIIE and AIOE for GM LAs on different axes
+both <- msoa_both %>% 
+  filter(is_GM) %>% 
+  select(msoacode = MSOA21CD,localauthority_name,AIIE_weightedbyemployees,AIIE_SD_weightedbyemployees) %>% 
+  left_join(
+    msoa.aioe.avs %>% filter(is_GM) %>% 
+      select(msoacode, AIOE_weightedmean, sd_AIOE),
+    by = 'msoacode'
+  )
+
+#Feel like I must have done this before but...
+ggplot(both, aes(x = AIIE_weightedbyemployees, y = AIOE_weightedmean)) +
+  geom_point() +
+  facet_wrap(~localauthority_name) +
+  geom_vline(xintercept = 0, alpha = 0.5, colour  = '#7c9724') +
+  geom_hline(yintercept = 0, alpha = 0.5, colour  = '#7c9724') 
+
+
+#Let's just plot means and their spread and put on same plot?
+#Oh, really should be not using MSOAs for this bit. Might be a rabbit hole too far just now!
+# meanz <- both %>% 
+#   group_by(localauthority_name) %>% 
+#   summarise()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

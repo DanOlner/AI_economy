@@ -34,6 +34,7 @@ theme_set(theme_light())
 
 #Get AIOE lookup
 soc_3dig_AIOE <- readRDS('../../data/UK_SOC_3digit_linkedAIOE.rds')
+#soc_3dig_AIOE <- readRDS('data/UK_SOC_3digit_linkedAIOE.rds')
 
 #Get map data
 overlay <- readRDS('../../local/data/AIE4measures_hexoverlay.rds')
@@ -66,6 +67,38 @@ Both are linked to Companies House firm level data for Greater Manchester.
 * [Map 2:](https://danolner.github.io/AI_economy/maps/GM_AI_FeltenAIIE_avweightedbyemployees_CompaniesHouseFirms1to3employees.html){target="_blank"} Same but using **just** firms with 1 to 3 employees.
 
 
+## One paragraph summaries of findings from figures, with fig-hover references
+
+Includes some repeated text from below. **Hover over figure references for preview.** (One or two are interactive, so you'll need to click through for those.)
+
+### Figures linking Felten AI exposure indices to UK data
+
+* @fig-aiiemsoa shows Felten's AI industrial exposure (AIIE) index applied to firms from Companies House data, in Greater Manchester boroughs, at MSOA level (with other core cities for comparison). Firms with 1 to 3 employees (green down-pointing triangles) are generally in more exposed sectors than other sized firms (though with overlap) and clearly more exposed than firms with 4-9 employees (red squares). That pattern is stronger in some places (Trafford, Stockport, Bolton) than others. The overall AIIE exposure level per borough is mostly consistent within them, for different size firms. So Rochdale, Oldham, Tameside and Wigan are overall lower on the AIIE measure.
+* @fig-aioemsoa instead links Felten's AI **occupational** (AIOE) exposure index to *residents* in Greater Manchester MSOAs (using Census 2021 data), again comparing boroughs against other core cities. While the overall spread is less far from the mean (the AIOE is also normalised), some local authorities are clearly much more exposed, on this measure. For example, Trafford has very few MSOAs less than the AIOE mean. Residents in Greater Manchester and core cities’ MSOAs tend to be on the ‘more exposed’ side of zero. With some differences, the overall average order of local authorities doesn’t differ hugely from that found in firm level data.
+
+
+
+### Adding in separate LLM-producedd measures for 'probability of job being augmentable' and 'probability of job being replaceable'
+
+* @fig-aiie_v_augrepl_hexscatter breaks Greater Manchester's geography down into 1000 metre hexagonal blocks, and for each block's firms, compares Felten's AIIE exposure measure (x axis) to 'probability of jobs in this hex are more augmentable than replaceable (aug > replace)' (y axis). Circle size shows job count in each hex. There is generally a positive slope: more exposed jobs are on average also in more augmentable-jobs sectors (this matches results others have found). The bottom right quadrant for each borough is the “high exposure plus jobs more likely to be replaceable” hexes. There aren’t many of these, though most boroughs have one or two (with central Manchester having the most jobs in this quadrant). Some boroughs are clearly more 'augment' than 'replace' (Salford, Rochdale) while still having a spread of exposure. Other boroughs have more in the bottom left quadrant: more replaceable jobs in theory, but less exposed so less AI risk (E.g. Wigan and Trafford).
+* The maps in @fig-hex1_aiie_augmorethanreplace1to3 and @fig-hex1_aiie_augmorethanreplace4plus plot the hex data (same data as @fig-aiie_v_augrepl_hexscatter), breaking down by micro-firms with 1 to 3 employees in @fig-hex1_aiie_augmorethanreplace1to3 and firms with 4+ employees in @fig-hex1_aiie_augmorethanreplace4plus. Firms with 1 to 3 employeesjump out as exposed in a different way, even when compared to larger micro-firms. These are **bivariate maps** - each axis has three values of ‘low / medium / high’, making nine possible combinations of the AIIE (y axis) and "aug>replace" (x axis). Consider just the top row of those nine values: all high AIIE and covering low, medium and high "augment more than replace" probability. The **darkest colour** is "high AIIE / high augment probability"; this clearly clusters much more for 1-3 employee firms, especially in Stockport and Trafford, but smaller geographical-spread clusters of "high for both" are visible elsewhere. There are very *few* "high AIIE but replaceable more likely than augmentable" (the clearest blue, top left in the legend) - although many more darker blue (top=mid) "high AIIE, equally likely augment as replace", which could be either. It's that darker blue colour that has strong clustering in 4+ firms in @fig-hex1_aiie_augmorethanreplace4plus, especially in central Manchester. Of equal interest are the **low exposure zones** (legend bottom row); both maps have clusters of these.
+* The hexmaps in @fig-hexmap_augreplace1to3 (firms with 1 to 3 employees) and @fig-hexmap_augreplace4plus (4 plus employees) show results for **separate** 'probability of jobs being replaceable' versus 'probability of jobs being augmentable' (in theory, separately from whether those jobs are actually AI-exposed, although there are different ways of viewing these measures). The diagonal colours on the 2-variable legend here could **all** be equivalent to 'probability more augmentable than replaceable is even'. Colours on the sides are the most interesting. For example, for firms with 1 to 3 employees in @fig-hexmap_augreplace1to3, the previously identified southern clusters appear as clearly more augmentable - with low to medium replaceable probability. Figure @fig-hexmap_augreplace4plus clearly lacks the yellow/brown "low aug medium to high replace" colours of the 1-3 employee map. The next few results try to dig deeper into these differences and put Greater Manchester in a national context.
+
+
+### Greater Manchester boroughs compared to rest of GB local authorities
+
+* Figures @fig-aiie_v_prob1to3 and @fig-aiie_v_prob4plus plot (weighted) means for AIIE and "probability augment > replace" for all Great Britain local authorities (red) with Greater Manchester boroughs in blue. OLS regression lines are overlaid. There's a striking pattern for Greater Manchester here. The previous relationship identified - firms with higher exposure (AIIE) tend to *also* have a higher probability of augmentable than replaceable jobs - is supported by the regression lines for both employee count groups, across Great Britain as a whole. But Greater Manchester differs in a few key ways. Most obviously, the slope for 4+ employee firms in GM is *negative*: higher exposure in GM boroughs tends to be associated with higher probability of *replaceable* jobs, on average - unlike the rest of Great Britain. For smalle 1-3 employee firms, GM does match the Great Britain slope (exposure and augmentability go together) - but GM's slope is in a different position. Overall, GM firms of the same exposure as other parts of Great Britain tend to have "higher probability replaceable" jobs. (It could equally be read as the slope being further right: jobs with similar aug>replace probability to the rest of Great Britain tend to be more exposed on average).
+* Figures @fig-augrepl1to3 (1 to 3 employees per firm) and @fig-augrepl4plus (4+ employees) do the same for the separate "probability job is augmentable" and "replaceable" measures on each axis. For 1-3 employee firms, the Great Britain relationship as a whole is spread out. Greater Manchester shares that - there's no clear pattern, with error bars also overlapping. However, for 4+ firms again, GM stands out. This is useful contrast to @fig-aiie_v_prob1to3 - while that figure is saying "GM boroughs with similar exposure to other parts of Great Britain tend to have more replaceable than augmentable jobs than the GB average," this one seems to show that - setting aside actual AI exposure - GM boroughs have higher augmentability chance per job than replacability, compared to equivalent Great Britain points. One interpretation of this *could* be that, if firms currently not so 'exposed' found ways to apply AI, they would more likely find jobs augmentable.
+
+
+
+### Percent of jobs in the top Great Britain deciles of each measure
+
+* For @fig-decilesaiie_v_augrepl and @fig-deciles_aug_v_repl, every job in Great Britain is ranked and allocated to deciles for the two pairs of measures (AIIE vs 'aug > replace'; 'augmentable' vs 'replaceable). The two plots then show the percent of jobs in each local authority that are in the **top 10% in Great Britain** (most exposed vs highest augment vs replace prob, then highest aug and replace prob separately). By definition, 10% of jobs overall will be in the top decile - the plots mark that 10% line, showing if GM boroughs are above or below that average. This is concentrating not on the averages, but on the smaller section of most exposed firms and checking how they compare nationally. Both figures suggest Manchester, Stockport and Trafford have more than the average number of jobs in top most exposed / highest augment probability decile, in both plots. @fig-deciles_aug_v_repl, comparing the two separate aug and replace measures, shows most GM boroughs with fewer jobs than the GB average in the top decile for each. 
+
+
+
+# Full results
 
 ## AI Industry Exposure (AIIE) applied to UK Companies House data
 
@@ -86,13 +119,14 @@ Three things jump out.
 
 
 
-```{r}
+```{r, fig-aiiemsoa}
 #| fig-height: 11
 
 #For 'both' see 'all three!'
 #Made here:
 #https://github.com/DanOlner/AI_economy/blob/7127bf7e022198965d409bd71444767428bb2da4/sector_linkages.R#L876
 msoa_both <- readRDS('../../local/data/msoa_3firmsizes_AIIE.rds')
+# msoa_both <- readRDS('local/data/msoa_3firmsizes_AIIE.rds')
 
 ggplot(msoa_both %>% filter(type != 'other'), 
        aes(
@@ -130,10 +164,10 @@ So - this shows something different to the previous plot: the occupational expos
 Things to note from this one:
 
 * While the overall spread is less far from the mean (the AIOE is also normalised), some local authorities are clearly much more exposed, on this measure. For example, Trafford has very few MSOAs less than the AIOE mean.
-* Residents in Greater Manchester and core cities' MSOAs tend to be on the 'more exposed' side of zero [**I will need to check this in more detail to make sure it holds up; I'd have expected central Manchester to have more of a mix?**]
+* Residents in Greater Manchester and core cities' MSOAs tend to be on the 'more exposed' side of zero.
 * With some differences, the overall average order of local authorities doesn't differ hugely from that found in firm level data.
 
-```{r}
+```{r, fig-aioemsoa}
 #| fig-height: 9
 
 
@@ -244,7 +278,7 @@ Some things to note:
 * Bottom right quadrant is the "high exposure plus jobs more likely to be replaceable" hexes. There aren't many of these, though most boroughs have one or two (with central Manchester having the most jobs in this quadrant). Note though, this is a probability - so e.g. an augmentable value of 0.6 would still on average suggest 40% of jobs in that sector could be replaceable.
 
 
-```{r}
+```{r, fig-aiie_v_augrepl_hexscatter}
 #| fig-height: 13
 
 #Data for all firms with 1+ employees 
@@ -285,7 +319,7 @@ So for example, in the map of firms with 1 to 3 employees:
 
 ### 1 to 3 employees
 
-```{r}
+```{r, fig-hex1_aiie_augmorethanreplace1to3}
 
 hexsummary <- overlay %>% 
   st_set_geometry(NULL) %>% 
@@ -336,7 +370,7 @@ tm_shape(sq.ch %>% rename(aug = augmentBT_weightedbyemployees, repl = replaceBT_
 
 ### 4+ employees
 
-```{r}
+```{r, fig-hex1_aiie_augmorethanreplace4plus}
 
 hexsummary <- overlay %>% 
   st_set_geometry(NULL) %>% 
@@ -434,7 +468,7 @@ Some comments on these two maps:
 
 ### Firms with 1 to 3 employees
 
-```{r}
+```{r, fig-hexmap_augreplace1to3}
 
 hexsummary <- overlay %>% 
   st_set_geometry(NULL) %>% 
@@ -487,7 +521,7 @@ tm_shape(sq.ch %>% rename(aug = augmentBT_weightedbyemployees, repl = replaceBT_
 
 ### Firms with 4+ employees
 
-```{r}
+```{r, fig-hexmap_augreplace4plus}
 
 hexsummary <- overlay %>% 
   st_set_geometry(NULL) %>% 
@@ -549,19 +583,22 @@ Things to note:
 * Aug v replace on separate axes is generally more varied across GB, and GM boroughs are positioned all over that map for micro-firms. 
 * Though for 4+ size firms in GM, separate aug/replace appears to tell a different story to above for 1-3 sized - the final plot suggests the augment slope is to the right of GB on average, so GM boroughs have a slightly higher probability of augmentable than replaceable jobs overall for 4+ firms. 
 
-## For firms with 1 to 3 employees
 
-### AIIE vs "probability aug > replace"
+## AIIE vs "probability aug > replace"
 
-```{r}
-LAsummary <- readRDS('../../local/data/LAsummary_1to3employees_4_AI_measures_weightedmeans.rds')
+### For firms with 1 to 3 employees
+
+
+```{r, fig-aiie_v_prob1to3}
+
+LAsummary1 <- readRDS('../../local/data/LAsummary_1to3employees_4_AI_measures_weightedmeans.rds')
 
 
 #AIIE vs aug>repl
 #"Set labels to the empty string "" to hide them. All data points repel the non-empty labels."
 #(Reason to not just add separately.)
 #https://ggrepel.slowkow.com/articles/examples.html
-p <- ggplot(LAsummary %>% 
+p <- ggplot(LAsummary1 %>% 
               mutate(
                 is_gm = localauthority_name %in% gmlas,
                 label = ifelse(is_gm, str_sub(localauthority_name,1,4), "")
@@ -590,57 +627,17 @@ p <- ggplot(LAsummary %>%
 p
 ```
 
-### Augment v replace separately
+### For firms with 4+ employees
 
-```{r}
-#Aug and repl separately
-p <- ggplot(LAsummary %>% 
-         mutate(
-           is_gm = localauthority_name %in% gmlas,
-           label = ifelse(is_gm, str_sub(localauthority_name,1,4), "")
-           ),
-       aes(
-         # x = AIIEfinal_weightedmean, y = replace_logability_BT_weightedmean, 
-         # x = augment_logability_BT_weightedmean, y = augment_morethan_replace_prob_weightedmean, 
-         x = augment_logability_BT_weightedmean, y = replace_logability_BT_weightedmean, 
-         # x = AIIEfinal_weightedmean, y = augment_morethan_replace_prob_weightedmean, 
-         colour = is_gm, size = is_gm, label =  label, text = localauthority_name, group = is_gm)
-       ) +
-  geom_point() +
-  geom_text_repel(
-    size = 5,
-    max.overlaps = Inf,
-    box.padding = 1
-    ) +
-  # geom_text(hjust = 'left') +
-  geom_smooth(method = 'lm', size = 1, alpha = 0.2) +
-  geom_vline(xintercept = 0) +
-  geom_hline(yintercept = 0) +
-  guides(size = F, colour = F) +
-  xlab("Augment") +
-  ylab("Replace")
-  
-p
+```{r, fig-aiie_v_prob4plus}
 
-
-```
-
-
-
-## For firms with 4+ employees
-
-
-### AIIE vs "probability aug > replace"
-
-```{r}
-
-LAsummary <- readRDS('../../local/data/LAsummary_4plus_employees_4_AI_measures_weightedmeans.rds')
+LAsummary2 <- readRDS('../../local/data/LAsummary_4plus_employees_4_AI_measures_weightedmeans.rds')
 
 #AIIE vs aug>repl
 #"Set labels to the empty string "" to hide them. All data points repel the non-empty labels."
 #(Reason to not just add separately.)
 #https://ggrepel.slowkow.com/articles/examples.html
-p <- ggplot(LAsummary %>% 
+p <- ggplot(LAsummary2 %>% 
               mutate(
                 is_gm = localauthority_name %in% gmlas,
                 label = ifelse(is_gm, str_sub(localauthority_name,1,4), "")
@@ -669,11 +666,52 @@ p <- ggplot(LAsummary %>%
 p
 ```
 
-### Augment v replace separately
 
-```{r}
+
+## Augment v replace separately
+
+### For firms with 1 to 3 employees
+
+```{r, fig-augrepl1to3}
 #Aug and repl separately
-p <- ggplot(LAsummary %>% 
+p <- ggplot(LAsummary1 %>% 
+         mutate(
+           is_gm = localauthority_name %in% gmlas,
+           label = ifelse(is_gm, str_sub(localauthority_name,1,4), "")
+           ),
+       aes(
+         # x = AIIEfinal_weightedmean, y = replace_logability_BT_weightedmean, 
+         # x = augment_logability_BT_weightedmean, y = augment_morethan_replace_prob_weightedmean, 
+         x = augment_logability_BT_weightedmean, y = replace_logability_BT_weightedmean, 
+         # x = AIIEfinal_weightedmean, y = augment_morethan_replace_prob_weightedmean, 
+         colour = is_gm, size = is_gm, label =  label, text = localauthority_name, group = is_gm)
+       ) +
+  geom_point() +
+  geom_text_repel(
+    size = 5,
+    max.overlaps = Inf,
+    box.padding = 1
+    ) +
+  # geom_text(hjust = 'left') +
+  geom_smooth(method = 'lm', size = 1, alpha = 0.2) +
+  geom_vline(xintercept = 0) +
+  geom_hline(yintercept = 0) +
+  guides(size = F, colour = F) +
+  xlab("Augment") +
+  ylab("Replace")
+  
+p
+
+
+```
+
+
+### For firms with 4+ employees
+
+```{r, fig-augrepl4plus}
+
+#Aug and repl separately
+p <- ggplot(LAsummary2 %>% 
          mutate(
            is_gm = localauthority_name %in% gmlas,
            label = ifelse(is_gm, str_sub(localauthority_name,1,4), "")
@@ -705,6 +743,75 @@ p
 ```
 
 
+## Job deciles
+
+In this section, every job in Great Britain is ranked and allocated to deciles for the two pairs of measures used above (AIIE vs 'aug > replace'; 'augmentable' vs 'replaceable). The two plots below then show the percent of jobs in each local authority that are in the **top 10% in Great Britain** (most exposed, highest augment vs replace prob, highest aug and replace prob separately).
+
+By definition, 10% of jobs overall will be in the top decile - the plots mark that 10% line, showing if GM boroughs are above or below that average.
+
+### AIIE v aug>repl
+
+
+```{r, fig-decilesaiie_v_augrepl}
+
+
+percent_topdecile <- readRDS('../../local/data/percentjobs_topdecile.rds')
+
+ggplot() +
+  geom_point(
+    data = percent_topdecile %>% filter(!gmla),
+    aes(y = augment_morethan_replace_prob, x = AIIEfinal),
+    # colour = 'grey'
+    alpha = 0.25
+    ) +
+  geom_point(
+    data = percent_topdecile %>% filter(gmla),
+    aes(y = augment_morethan_replace_prob, x = AIIEfinal),
+    colour = 'blue', size = 3
+    ) +
+  geom_text_repel(
+    data = percent_topdecile %>% filter(gmla),
+    mapping = aes(label = labels, y = augment_morethan_replace_prob, x = AIIEfinal),
+    max.overlaps = Inf,
+    box.padding = 1
+  ) +
+  coord_cartesian(xlim = c(0,20), ylim = c(5,15)) +
+  xlab('% of jobs in GB top AIIE decile') +
+  ylab('% of jobs in GB top aug > replace decile') +
+  geom_vline(xintercept = 10, alpha = 0.5, colour  = '#7c9724') +
+  geom_hline(yintercept = 10, alpha = 0.5, colour  = '#7c9724') 
+
+```
+
+
+
+```{r, fig-deciles_aug_v_repl}
+
+ggplot() +
+  geom_point(
+    data = percent_topdecile %>% filter(!gmla),
+    aes(y = replace_logability_BT, x = augment_logability_BT),
+    colour = 'grey'
+    ) +
+  geom_point(
+    data = percent_topdecile %>% filter(gmla),
+    aes(y = replace_logability_BT, x = augment_logability_BT),
+    colour = 'blue', size = 3
+    ) +
+  geom_text_repel(
+    data = percent_topdecile %>% filter(gmla),
+    mapping = aes(label = labels, y = replace_logability_BT, x = augment_logability_BT),
+    max.overlaps = Inf,
+    box.padding = 1
+  ) +
+  coord_cartesian(xlim = c(3,20), ylim = c(5,15)) +
+  xlab('% of jobs in GB top most augmentable decile') +
+  ylab('% of jobs in GB top most replaceable decile') +
+  geom_vline(xintercept = 10, alpha = 0.5, colour  = '#7c9724') +
+  geom_hline(yintercept = 10, alpha = 0.5, colour  = '#7c9724') 
+
+
+```
 
 
 
@@ -788,3 +895,9 @@ ggplot(la.aioe.avs %>% filter(type != 'other'),
 
 
 ```
+
+
+
+
+
+
