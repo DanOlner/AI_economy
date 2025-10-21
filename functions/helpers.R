@@ -11,3 +11,5 @@ qg <- function(...) grepl(..., ignore.case = T)
 
 #Same as above but returning distinct values
 getdistinct <- function(...) grep(..., ignore.case = T, value = T) %>% unique
+
+percent_change <- function(x,y) ((y - x) / x) * 100

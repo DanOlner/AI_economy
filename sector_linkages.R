@@ -2,7 +2,7 @@
 library(tidyverse)
 library(plotly)
 library(ggrepel)
-library(nomisr)
+# library(nomisr)
 library(sf)
 library(tmap)
 library(ggridges)
@@ -610,6 +610,7 @@ ch_all_aiie <- ch_all_aiie %>%
 
 #OK. Now we can do something like make a map. Let's just save that though
 saveRDS(ch_all_aiie,'local/data/ch_all_aiie_draft1.rds')
+ch_all_aiie = readRDS('local/data/ch_all_aiie_draft1.rds')
 
 
 
@@ -1475,8 +1476,22 @@ saveRDS(chk,'local/data/ch_with_4AIE_measures.rds')
 
 
 #Then MSOA overlay again and comparison of all measures
-ch <- chk
-rm(chk)
+
+# ch <- chk
+# rm(chk)
+
+ch <- readRDS('local/data/ch_with_4AIE_measures.rds')
+
+#Percent of firms with at least one employee value in that field
+table(!is.na(ch$Employees_thisyear)) %>% prop.table()
+
+#For only those, what breakdown of numbers?
+ch_notna_or_zero <- ch %>% filter(!is.na(Employees_thisyear) & Employees_thisyear!=0)
+
+#table(ch$Employees_thisyear==0) %>% prop.table()
+table(ch_notna_or_zero$Employees_thisyear==1) %>% prop.table()
+table(ch_notna_or_zero$Employees_thisyear==2) %>% prop.table()
+
 
 x <- proc.time()
 ch_msoaoverlay <- st_intersection(
@@ -2243,15 +2258,382 @@ ggplot(both, aes(x = AIIE_weightedbyemployees, y = AIOE_weightedmean)) +
 
 
 
+# Extra outputs for RWW----
+
+## Hex plots but just for GM then just for Salford----
+# Plus identity what's in one of those Salford MSOAs
+#For AIIE
+
+# msoa_both <- readRDS('../../local/data/msoa_3firmsizes_AIIE.rds')
+msoa_both <- readRDS('local/data/msoa_3firmsizes_AIIE.rds')
+
+msoa.geo <- st_read('../../../MapPolygons/EnglandWalesMerged/Middle_layer_Super_Output_Areas_December_2021_Boundaries_EW_BGC_V3_-3870998653275641389.geojson') %>% 
+  select(MSOA21CD)
+
+ch_all_aiie = readRDS('local/data/ch_all_aiie_draft1.rds')
+
+#Blue peter'd those up just to GM
+itl2 <- readRDS('local/data/itl2_for_GM.rds')
+lad <- readRDS('local/data/las_for_GM.rds')
+
+
+# Just GM
+ggplot(msoa_both %>% filter(type == 'GM LA'), 
+       aes(
+         x = AIIE_weightedbyemployees, 
+         y = fct_reorder(localauthority_name,AIIE_weightedbyemployees), 
+         alpha = type, 
+         size = type,
+         colour = firmsize,
+         shape  = firmsize
+       )) +
+  geom_point(position = position_dodge(width = 0.7)) +
+  scale_size_manual(values = c(3)) +
+  scale_color_brewer(palette = 'Dark2') +
+  scale_shape_manual(values = c(25,22,24)) +
+  scale_alpha_manual(values = c(1)) +
+  geom_vline(xintercept = 0, colour = 'black', alpha = 0.5) +
+  xlab('AIIE') +
+  ylab('') +
+  guides(size = F,alpha=F) 
+# theme(legend.title=element_blank())
+
+ggsave('local/outputs/gm_msoa_aiie_by_firm.png', width = 6, height = 9)
+
+
+# Then just Salford
+ggplot(msoa_both %>% filter(type == 'GM LA', qg('Salford',localauthority_name)), 
+       aes(
+         x = AIIE_weightedbyemployees, 
+         y = fct_reorder(localauthority_name,AIIE_weightedbyemployees), 
+         alpha = type, 
+         size = type,
+         colour = firmsize,
+         shape  = firmsize
+       )) +
+  geom_point(position = position_dodge(width = 0.7)) +
+  scale_size_manual(values = c(3)) +
+  scale_color_brewer(palette = 'Dark2') +
+  scale_shape_manual(values = c(25,22,24)) +
+  scale_alpha_manual(values = c(1)) +
+  geom_vline(xintercept = 0, colour = 'black', alpha = 0.5) +
+  xlab('AIIE') +
+  ylab('') +
+  guides(size = F,alpha=F) 
+
+ggsave('local/outputs/salford_msoa_aiie_by_firm.png', width = 6, height = 3)
+
+# RWW also wants info on what's in the highlighted section 1-3 firms for Salford
+# Make map, dig into what those firms are
+# For which we'll need to return to orig data again...
+
+# This loaded above...
+# msoa.geo
+# Get for GM, add in msoa_both data
+msoa.geo.gm = msoa.geo %>%
+  inner_join(
+    # msoa_both %>% filter(type == 'GM LA', firmsize == '1-3'),
+    msoa_both %>% filter(type == 'GM LA', firmsize == '1-3'),
+    by = 'MSOA21CD'
+  )
+
+
+# E02006963 is the outlier
+tmap_mode('view')
+tmap_mode('plot')
+
+p = tm_shape(msoa.geo.gm %>% rename(AIIE = AIIE_weightedbyemployees)) +
+  tm_polygons(
+    fill = 'AIIE', fill.scale = tm_scale_continuous(values = "-matplotlib.rd_yl_bu"),
+    lwd = 0.1,
+    fill.legend = tm_legend(position = c('left','bottom'))
+    ) +
+  tm_shape(lad) +
+  tm_borders(col = 'black', lwd = 1, fill_alpha = 0.3) +
+  tm_shape(itl2) +
+  tm_borders(col = 'black', lwd = 4) 
+
+tmap_save(p, 'local/outputs/gm_msoa_aiiemap_redhigh.jpeg', width = 10, height = 8)  
+
+
+# OK good. Now to say something about what characterises that Salford high AIIE MSOA, sector and firm wise
+# For all of GM for context? Yeah...
+# And just for 1-3 employee firms
+ch_subemp_gm = ch_all_aiie %>% filter(ITL221NM == 'Greater Manchester', between(Employees_thisyear,1,3))
+# Repeat for 4+
+ch_subemp_gm = ch_all_aiie %>% filter(ITL221NM == 'Greater Manchester', Employees_thisyear >= 4)
+
+# Add in MSOAs again then remove geometry, don't need it
+ch_subemp_gm = st_intersection(ch_subemp_gm, msoa.geo.gm %>% select(MSOA21CD)) %>% st_set_geometry(NULL)
+
+
+# Need a bit of playing with this to get to the right way of showing MSOA differences
+chk = ch_subemp_gm %>% 
+  group_by(MSOA21CD,SIC_SECTION_NAME) %>% 
+  summarise(
+    AIIE_weightedbyemployees = weighted.mean(AIIEfinal,Employees_thisyear),
+    totalemployees = sum(Employees_thisyear),
+    totalfirms = n(),
+    la = max(localauthority_name)
+  )
+
+# Let's try facetting by... section?
+ggplot(chk, aes(x = AIIE_weightedbyemployees, y = fct_reorder(SIC_SECTION_NAME,AIIE_weightedbyemployees), size = totalemployees)) +
+  geom_point() +
+  facet_wrap(~la)
+
+# Let's just have a look within each Salford MSOA
+ggplot(chk %>% filter(la == 'Salford', !is.na(SIC_SECTION_NAME)), 
+       aes(x = AIIE_weightedbyemployees, y = fct_reorder(SIC_SECTION_NAME,AIIE_weightedbyemployees), size = totalemployees)) +
+  geom_point() +
+  facet_wrap(~MSOA21CD) +
+  # ggtitle('Salford: AIIE average per SIC section / MSOA for firms with 1 to 3 employees')
+  ggtitle('Salford: AIIE average per SIC section / MSOA for firms with 4+ employees')
+
+# ggsave('local/outputs/salford_msoa_aiie_by_section_1to3employees_fullplot.png', width = 12, height = 12)
+ggsave('local/outputs/salford_msoa_aiie_by_section_4plusemployees_fullplot.png', width = 12, height = 12)
+
+# And save a CSV of the firms in question, ordered by size...
+write_csv(ch_subemp_gm %>% filter(MSOA21CD == 'E02006963') %>% arrange(-Employees_thisyear) ,
+          'local/data/ch_subemp_gm_firmlist.csv')
+
+# Save all Salford firms 1 to 3 employees
+write_csv(
+  ch_all_aiie %>% filter(between(Employees_thisyear,1,3), localauthority_name == 'Salford'),
+  'local/data/ch_salford_firmlist_1to3employees.csv'
+  )
+
+
+## RR bits: occ Census data----
+
+#For this, please could I have a visualisation of 
+# 1) just all GM boroughs, 2) just Salford, 3) Just Manchester.
+
+#Via bulk download
+#Workplace counts at MSOA first
+#105 categories of SOC2020, so that's 
+#3 digit "minor group"
+#https://www.hesa.ac.uk/collection/coding-manual-tools/sicsocdata/soc-2020
+occ.msoa <- read_csv("local/data/wp016/WP016_msoa.csv")
+
+soc_3dig_AIOE <- readRDS('data/UK_SOC_3digit_linkedAIOE.rds')
+
+#Some tweaks to MSOA occupation counts census data
+occ.msoa <- occ.msoa %>% 
+  filter(!qg("does not apply",`Occupation (current) (105 categories) Label`)) %>% 
+  mutate(
+    occupation_name = str_sub(`Occupation (current) (105 categories) Label`,5,-1),
+    occupation_code = str_sub(`Occupation (current) (105 categories) Label`,1,3)
+  ) %>% 
+  select(-c(`Occupation (current) (105 categories) Code`,`Occupation (current) (105 categories) Label`))
+
+
+#Add AIOE into the MSOA data
+occ.msoa.aioe <- occ.msoa %>% 
+  rename(
+    msoacode = `Middle layer Super Output Areas Code`,
+    msoalabel = `Middle layer Super Output Areas Label`
+  ) %>% 
+  left_join(
+    soc_3dig_AIOE %>% select(-SOC20203dig_name),
+    by = c('occupation_code' = 'SOC20203dig_code')
+  )
 
 
 
+#From https://github.com/DanOlner/RegionalEconomicTools/blob/46907c9eb05193fe790579f73ff5f1ff019d90f5/quarto_docs/Bradford_sectorclusters.qmd#L384C1-L411C53
+#England and Wales only here
+corecities <- getdistinct('sheffield|Belfast|Birmingham|Bristol|Cardiff|Glasgow|Leeds|Liverpool|Manchester|Tyne|Nottingham', unique(str_sub(occ.msoa.aioe$msoalabel,1,-5)))
+
+#Yes, all in there, need to remove a few...
+corecities <- corecities[!grepl(x = corecities, pattern = 'Greater|shire|side', ignore.case = T)]
+corecities <- corecities[order(corecities)]
+
+gmlas <- readRDS('data/gmlas.rds')
+
+
+#Per MSOA weighted means and labels
+msoa.aioe.avs <- occ.msoa.aioe %>% 
+  group_by(msoacode,msoalabel) %>% 
+  summarise(
+    AIOE_weightedmean = weighted.mean(AIOE,Count),
+    sd_AIOE = sqrt(Hmisc::wtd.var(AIOE,Count))
+  ) %>% 
+  mutate(
+    laname = str_sub(msoalabel,1,-5),
+    type = case_when(
+      laname %in% gmlas ~ "GM LA",
+      laname %in% corecities[!qg('manc',corecities)] ~ "core city (minus manc)",
+      .default = "other"
+    ),
+    is_GM = laname %in% gmlas
+  )
 
 
 
+#Plot individual MSOA values for each LA
+ggplot(msoa.aioe.avs %>% filter(type != 'other'), 
+       aes(
+         x = AIOE_weightedmean, 
+         y = fct_reorder(laname,AIOE_weightedmean), 
+         colour = type, 
+         size = is_GM)) +
+  geom_jitter(height = 0.1) +
+  # geom_errorbar(aes(xmin = xmin, xmax = xmax), width = 0.1) +
+  scale_size_manual(values = c(0.5,1)) +
+  # scale_colour_manual(values = c('blue','green','black')) +
+  scale_color_brewer(palette = 'Dark2') +
+  geom_vline(xintercept = 0, colour = 'black', alpha = 0.5) +
+  xlab('AIOE') +
+  ylab('') +
+  guides(size = F) +
+  theme(legend.title=element_blank())
 
 
+# Repeat for those subsets
 
+# Just all GM boroughs
+ggplot(msoa.aioe.avs %>% filter(type == 'GM LA'), 
+       aes(
+         x = AIOE_weightedmean, 
+         y = fct_reorder(laname,AIOE_weightedmean)
+         # colour = type, 
+         # size = is_GM
+         )) +
+  geom_jitter(height = 0.1) +
+  # geom_errorbar(aes(xmin = xmin, xmax = xmax), width = 0.1) +
+  scale_size_manual(values = c(0.5,1)) +
+  # scale_colour_manual(values = c('blue','green','black')) +
+  scale_color_brewer(palette = 'Dark2') +
+  geom_vline(xintercept = 0, colour = 'black', alpha = 0.5) +
+  xlab('AIOE') +
+  ylab('') +
+  guides(size = F) +
+  theme(legend.title=element_blank()) +
+  ggtitle("Felten's AIOE for residents in MSOAs\n(Census 2021 occupation data)")
+
+ggsave('local/outputs/AIOE_GMboroughs.png', width = 6, height = 10)
+
+
+# Salford then Manchester
+ggplot(msoa.aioe.avs %>% filter(laname == 'Salford'), 
+       aes(
+         x = AIOE_weightedmean, 
+         y = fct_reorder(laname,AIOE_weightedmean)
+         # colour = type, 
+         # size = is_GM
+       )) +
+  geom_jitter(height = 0.1) +
+  # geom_errorbar(aes(xmin = xmin, xmax = xmax), width = 0.1) +
+  scale_size_manual(values = c(0.5,1)) +
+  # scale_colour_manual(values = c('blue','green','black')) +
+  scale_color_brewer(palette = 'Dark2') +
+  geom_vline(xintercept = 0, colour = 'black', alpha = 0.5) +
+  xlab('AIOE') +
+  ylab('') +
+  guides(size = F) +
+  theme(legend.title=element_blank()) +
+  ggtitle("Felten's AIOE for residents in MSOAs\n(Census 2021 occupation data)")
+
+ggsave('local/outputs/AIOE_salford.png', width = 6, height = 2)
+
+
+ggplot(msoa.aioe.avs %>% filter(laname == 'Manchester'), 
+       aes(
+         x = AIOE_weightedmean, 
+         y = fct_reorder(laname,AIOE_weightedmean)
+         # colour = type, 
+         # size = is_GM
+       )) +
+  geom_jitter(height = 0.1) +
+  # geom_errorbar(aes(xmin = xmin, xmax = xmax), width = 0.1) +
+  scale_size_manual(values = c(0.5,1)) +
+  # scale_colour_manual(values = c('blue','green','black')) +
+  scale_color_brewer(palette = 'Dark2') +
+  geom_vline(xintercept = 0, colour = 'black', alpha = 0.5) +
+  xlab('AIOE') +
+  ylab('') +
+  guides(size = F) +
+  theme(legend.title=element_blank()) +
+  ggtitle("Felten's AIOE for residents in MSOAs\n(Census 2021 occupation data)")
+
+ggsave('local/outputs/AIOE_manchester.png', width = 6, height = 2)
+
+
+## Hex AIIE by aug>repl plots----
+
+# "a figure for all of Greater Manchester to go with the Salford One"
+# So that'll require making employee counts a percentage to make them comparable.
+# And actually now I think of it, redoing the summary calcs as it's weighted
+
+# Nope scratch that. Each one is hex summary, so those will all have to be overlaid for GM as a whole.
+
+
+# overlay = readRDS('local/data/AIE4measures_hexoverlay.rds')
+#saveRDS(sq,'local/data/sq_forhexoverlay.rds')
+
+#This no longer needs to be geo, which will speed up
+#Can link back to grids once done
+
+#Let's find an average AIIE weighted by employee number in each grid square
+# hexsummary <- overlay %>% 
+#   st_set_geometry(NULL) %>% 
+#   filter(Employees_thisyear > 0) %>% #Only firms with employees recorded in latest year
+#   # filter(between(Employees_thisyear,1,3)) %>% #Microfirms
+#   # filter(between(Employees_thisyear,4,9)) %>% #Microfirms
+#   # filter(Employees_thisyear > 9) %>%
+#   group_by(id) %>% 
+#   summarise(
+#     AIIE_weightedbyemployees = weighted.mean(AIIEfinal,Employees_thisyear),
+#     augmentmorethanreplaceprob_weightedbyemployees = weighted.mean(augment_morethan_replace_prob,Employees_thisyear),
+#     augmentBT_weightedbyemployees = weighted.mean(augment_logability_BT,Employees_thisyear),
+#     replaceBT_weightedbyemployees = weighted.mean(replace_logability_BT,Employees_thisyear),
+#     totalemployees = sum(Employees_thisyear),
+#     totalfirms = n(),
+#     la = max(localauthority_name)
+#   ) %>% 
+#   group_by(id) %>%
+#   filter(sum(totalemployees) >= 10) %>% #keep only gridsquares where total employee count is more than / equal to 100
+#   ungroup()
+
+hexsummary <- readRDS('../../local/data/hexsummary.rds')
+
+# This is the original
+ggplot(
+  hexsummary %>% rename(AIIE = AIIE_weightedbyemployees, `aug > replace` = augmentmorethanreplaceprob_weightedbyemployees),
+  aes(x = AIIE, y = `aug > replace`, size = totalemployees)) +
+  geom_point(alpha = 0.5) +
+  scale_size(range = c(2,20)) +
+  geom_vline(xintercept = 0) +
+  geom_hline(yintercept = 0.5) +
+  # geom_smooth(method = 'lm') +
+  facet_wrap(~la, ncol = 2)
+  # facet_wrap(~la,scales='free', ncol = 2)
+
+ggsave('local/outputs/AIIE_v_augrepl_hexmeans_allGMboroughs_fixedscale.png', width = 8, height = 12)
+
+
+# Try with 'Salford' and 'not Salford'
+ggplot(
+  hexsummary %>% 
+    rename(AIIE = AIIE_weightedbyemployees, `aug > replace` = augmentmorethanreplaceprob_weightedbyemployees) %>% 
+    mutate(
+      is_salford = ifelse(la == 'Salford','Salford','Other GM'),
+      is_salford = factor(is_salford, levels = c('Salford','Other GM'))
+      )
+    ,
+  aes(x = AIIE, y = `aug > replace`, size = totalemployees, alpha = is_salford)) +
+  # geom_point(alpha = 0.3) +
+  geom_point() +
+  scale_alpha_manual(values = c(0.4,0.2)) +
+  scale_size(range = c(2,20)) +
+  geom_vline(xintercept = 0) +
+  geom_hline(yintercept = 0.5) +
+  # geom_smooth(method = 'lm') +
+  facet_wrap(~is_salford, ncol = 1) +
+  guides(alpha = F)
+
+ggsave('local/outputs/AIIE_v_augrepl_hexmeans_salford_v_restofGM_fixedscale.png', width = 6, height = 8)
 
 
 

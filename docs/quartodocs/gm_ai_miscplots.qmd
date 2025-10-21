@@ -18,7 +18,6 @@ collapse: false
 
 ```{r setup}
 library(tidyverse)
-library(nomisr)
 library(ggrepel)
 library(sf)
 library(tmap)
@@ -55,17 +54,14 @@ lad <- readRDS('../../local/data/las_for_GM.rds')
 
 The **first section** applies data from [Felten et al](https://sms.onlinelibrary.wiley.com/doi/full/10.1002/smj.3286){target="_blank"} paper "Occupational, industry, and geographic exposure to artificial intelligence: A novel dataset and its potential uses" (2021). Original US data available [here](https://github.com/AIOE-Data/AIOE){target="_blank"}.
 
-The **second section** presents results from a 'jobs replaceable versus augementable' analysis, looking at those separately as well as linking them to Felten's AIIE. 
+The **second section** presents results from a 'jobs replaceable versus augementable' analysis, looking at those separately as well as linking them to Felten's AIIE.
 
 Both are linked to Companies House firm level data for Greater Manchester.
 
-[To be done: explanation of link process. All code for that is [here](https://github.com/DanOlner/AI_economy/tree/main){target="_blank"}.]
-
 ## Links to interactive maps
 
-* [Map 1:](https://danolner.github.io/AI_economy/maps/GM_AI_FeltenAIIE_avweightedbyemployees_CompaniesHouse.html){target="_blank"} Greater Manchester AI Industry Exposure hexmap (opens in new tab). Using Companies House data, all firm sizes.
-* [Map 2:](https://danolner.github.io/AI_economy/maps/GM_AI_FeltenAIIE_avweightedbyemployees_CompaniesHouseFirms1to3employees.html){target="_blank"} Same but using **just** firms with 1 to 3 employees.
-
+-   [Map 1:](https://danolner.github.io/AI_economy/maps/GM_AI_FeltenAIIE_avweightedbyemployees_CompaniesHouse.html){target="_blank"} Greater Manchester AI Industry Exposure hexmap (opens in new tab). Using Companies House data, all firm sizes.
+-   [Map 2:](https://danolner.github.io/AI_economy/maps/GM_AI_FeltenAIIE_avweightedbyemployees_CompaniesHouseFirms1to3employees.html){target="_blank"} Same but using **just** firms with 1 to 3 employees.
 
 ## One paragraph summaries of findings from figures, with fig-hover references
 
@@ -73,51 +69,45 @@ Includes some repeated text from below. **Hover over figure references for previ
 
 ### Figures linking Felten AI exposure indices to UK data
 
-* @fig-aiiemsoa shows Felten's AI industrial exposure (AIIE) index applied to firms from Companies House data, in Greater Manchester boroughs, at MSOA level (with other core cities for comparison). Firms with 1 to 3 employees (green down-pointing triangles) are generally in more exposed sectors than other sized firms (though with overlap) and clearly more exposed than firms with 4-9 employees (red squares). That pattern is stronger in some places (Trafford, Stockport, Bolton) than others. The overall AIIE exposure level per borough is mostly consistent within them, for different size firms. So Rochdale, Oldham, Tameside and Wigan are overall lower on the AIIE measure.
-* @fig-aioemsoa instead links Felten's AI **occupational** (AIOE) exposure index to *residents* in Greater Manchester MSOAs (using Census 2021 data), again comparing boroughs against other core cities. While the overall spread is less far from the mean (the AIOE is also normalised), some local authorities are clearly much more exposed, on this measure. For example, Trafford has very few MSOAs less than the AIOE mean. Residents in Greater Manchester and core cities’ MSOAs tend to be on the ‘more exposed’ side of zero. With some differences, the overall average order of local authorities doesn’t differ hugely from that found in firm level data.
+-   @fig-aiiemsoa shows Felten's AI industrial exposure (AIIE) index applied to firms from Companies House data, in Greater Manchester boroughs, at MSOA level (with other core cities for comparison). Firms with 1 to 3 employees (green down-pointing triangles) are generally in more exposed sectors than other sized firms (though with overlap) and clearly more exposed than firms with 4-9 employees (red squares). That pattern is stronger in some places (Trafford, Stockport, Bolton) than others. The overall AIIE exposure level per borough is mostly consistent within them, for different size firms. So Rochdale, Oldham, Tameside and Wigan are overall lower on the AIIE measure.
+-   @fig-aioemsoa instead links Felten's AI **occupational** (AIOE) exposure index to *residents* in Greater Manchester MSOAs (using Census 2021 data), again comparing boroughs against other core cities. While the overall spread is less far from the mean (the AIOE is also normalised), some local authorities are clearly much more exposed, on this measure. For example, Trafford has very few MSOAs less than the AIOE mean. Residents in Greater Manchester and core cities’ MSOAs tend to be on the ‘more exposed’ side of zero. With some differences, the overall average order of local authorities doesn’t differ hugely from that found in firm level data.
 
+### Adding in separate LLM-produced measures for 'probability of job being augmentable' and 'probability of job being replaceable'
 
-
-### Adding in separate LLM-producedd measures for 'probability of job being augmentable' and 'probability of job being replaceable'
-
-* @fig-aiie_v_augrepl_hexscatter breaks Greater Manchester's geography down into 1000 metre hexagonal blocks, and for each block's firms, compares Felten's AIIE exposure measure (x axis) to 'probability of jobs in this hex are more augmentable than replaceable (aug > replace)' (y axis). Circle size shows job count in each hex. There is generally a positive slope: more exposed jobs are on average also in more augmentable-jobs sectors (this matches results others have found). The bottom right quadrant for each borough is the “high exposure plus jobs more likely to be replaceable” hexes. There aren’t many of these, though most boroughs have one or two (with central Manchester having the most jobs in this quadrant). Some boroughs are clearly more 'augment' than 'replace' (Salford, Rochdale) while still having a spread of exposure. Other boroughs have more in the bottom left quadrant: more replaceable jobs in theory, but less exposed so less AI risk (E.g. Wigan and Trafford).
-* The maps in @fig-hex1_aiie_augmorethanreplace1to3 and @fig-hex1_aiie_augmorethanreplace4plus plot the hex data (same data as @fig-aiie_v_augrepl_hexscatter), breaking down by micro-firms with 1 to 3 employees in @fig-hex1_aiie_augmorethanreplace1to3 and firms with 4+ employees in @fig-hex1_aiie_augmorethanreplace4plus. Firms with 1 to 3 employeesjump out as exposed in a different way, even when compared to larger micro-firms. These are **bivariate maps** - each axis has three values of ‘low / medium / high’, making nine possible combinations of the AIIE (y axis) and "aug>replace" (x axis). Consider just the top row of those nine values: all high AIIE and covering low, medium and high "augment more than replace" probability. The **darkest colour** is "high AIIE / high augment probability"; this clearly clusters much more for 1-3 employee firms, especially in Stockport and Trafford, but smaller geographical-spread clusters of "high for both" are visible elsewhere. There are very *few* "high AIIE but replaceable more likely than augmentable" (the clearest blue, top left in the legend) - although many more darker blue (top=mid) "high AIIE, equally likely augment as replace", which could be either. It's that darker blue colour that has strong clustering in 4+ firms in @fig-hex1_aiie_augmorethanreplace4plus, especially in central Manchester. Of equal interest are the **low exposure zones** (legend bottom row); both maps have clusters of these.
-* The hexmaps in @fig-hexmap_augreplace1to3 (firms with 1 to 3 employees) and @fig-hexmap_augreplace4plus (4 plus employees) show results for **separate** 'probability of jobs being replaceable' versus 'probability of jobs being augmentable' (in theory, separately from whether those jobs are actually AI-exposed, although there are different ways of viewing these measures). The diagonal colours on the 2-variable legend here could **all** be equivalent to 'probability more augmentable than replaceable is even'. Colours on the sides are the most interesting. For example, for firms with 1 to 3 employees in @fig-hexmap_augreplace1to3, the previously identified southern clusters appear as clearly more augmentable - with low to medium replaceable probability. Figure @fig-hexmap_augreplace4plus clearly lacks the yellow/brown "low aug medium to high replace" colours of the 1-3 employee map. The next few results try to dig deeper into these differences and put Greater Manchester in a national context.
-
+-   @fig-aiie_v_augrepl_hexscatter breaks Greater Manchester's geography down into 1000 metre hexagonal blocks, and for each block's firms, compares Felten's AIIE exposure measure (x axis) to 'probability of jobs in this hex are more augmentable than replaceable (aug \> replace)' (y axis). Circle size shows job count in each hex. There is generally a positive slope: more exposed jobs are on average also in more augmentable-jobs sectors (this matches results others have found). The bottom right quadrant for each borough is the “high exposure plus jobs more likely to be replaceable” hexes. There aren’t many of these, though most boroughs have one or two (with central Manchester having the most jobs in this quadrant). Some boroughs are clearly more 'augment' than 'replace' (Salford, Rochdale) while still having a spread of exposure. Other boroughs have more in the bottom left quadrant: more replaceable jobs in theory, but less exposed so less AI risk (E.g. Wigan and Trafford).
+-   The maps in @fig-hex1_aiie_augmorethanreplace1to3 and @fig-hex1_aiie_augmorethanreplace4plus plot the hex data (same data as @fig-aiie_v_augrepl_hexscatter), breaking down by micro-firms with 1 to 3 employees in @fig-hex1_aiie_augmorethanreplace1to3 and firms with 4+ employees in @fig-hex1_aiie_augmorethanreplace4plus. Firms with 1 to 3 employeesjump out as exposed in a different way, even when compared to larger micro-firms. These are **bivariate maps** - each axis has three values of ‘low / medium / high’, making nine possible combinations of the AIIE (y axis) and "aug\>replace" (x axis). Consider just the top row of those nine values: all high AIIE and covering low, medium and high "augment more than replace" probability. The **darkest colour** is "high AIIE / high augment probability"; this clearly clusters much more for 1-3 employee firms, especially in Stockport and Trafford, but smaller geographical-spread clusters of "high for both" are visible elsewhere. There are very *few* "high AIIE but replaceable more likely than augmentable" (the clearest blue, top left in the legend) - although many more darker blue (top=mid) "high AIIE, equally likely augment as replace", which could be either. It's that darker blue colour that has strong clustering in 4+ firms in @fig-hex1_aiie_augmorethanreplace4plus, especially in central Manchester. Of equal interest are the **low exposure zones** (legend bottom row); both maps have clusters of these.
+-   The hexmaps in @fig-hexmap_augreplace1to3 (firms with 1 to 3 employees) and @fig-hexmap_augreplace4plus (4 plus employees) show results for **separate** 'probability of jobs being replaceable' versus 'probability of jobs being augmentable' (in theory, separately from whether those jobs are actually AI-exposed, although there are different ways of viewing these measures). The diagonal colours on the 2-variable legend here could **all** be equivalent to 'probability more augmentable than replaceable is even'. Colours on the sides are the most interesting. For example, for firms with 1 to 3 employees in @fig-hexmap_augreplace1to3, the previously identified southern clusters appear as clearly more augmentable - with low to medium replaceable probability. Figure @fig-hexmap_augreplace4plus clearly lacks the yellow/brown "low aug medium to high replace" colours of the 1-3 employee map. The next few results try to dig deeper into these differences and put Greater Manchester in a national context.
 
 ### Greater Manchester boroughs compared to rest of GB local authorities
 
-* Figures @fig-aiie_v_prob1to3 and @fig-aiie_v_prob4plus plot (weighted) means for AIIE and "probability augment > replace" for all Great Britain local authorities (red) with Greater Manchester boroughs in blue. OLS regression lines are overlaid. There's a striking pattern for Greater Manchester here. The previous relationship identified - firms with higher exposure (AIIE) tend to *also* have a higher probability of augmentable than replaceable jobs - is supported by the regression lines for both employee count groups, across Great Britain as a whole. But Greater Manchester differs in a few key ways. Most obviously, the slope for 4+ employee firms in GM is *negative*: higher exposure in GM boroughs tends to be associated with higher probability of *replaceable* jobs, on average - unlike the rest of Great Britain. For smalle 1-3 employee firms, GM does match the Great Britain slope (exposure and augmentability go together) - but GM's slope is in a different position. Overall, GM firms of the same exposure as other parts of Great Britain tend to have "higher probability replaceable" jobs. (It could equally be read as the slope being further right: jobs with similar aug>replace probability to the rest of Great Britain tend to be more exposed on average).
-* Figures @fig-augrepl1to3 (1 to 3 employees per firm) and @fig-augrepl4plus (4+ employees) do the same for the separate "probability job is augmentable" and "replaceable" measures on each axis. For 1-3 employee firms, the Great Britain relationship as a whole is spread out. Greater Manchester shares that - there's no clear pattern, with error bars also overlapping. However, for 4+ firms again, GM stands out. This is useful contrast to @fig-aiie_v_prob1to3 - while that figure is saying "GM boroughs with similar exposure to other parts of Great Britain tend to have more replaceable than augmentable jobs than the GB average," this one seems to show that - setting aside actual AI exposure - GM boroughs have higher augmentability chance per job than replacability, compared to equivalent Great Britain points. One interpretation of this *could* be that, if firms currently not so 'exposed' found ways to apply AI, they would more likely find jobs augmentable.
-
-
+-   Figures @fig-aiie_v_prob1to3 and @fig-aiie_v_prob4plus plot (weighted) means for AIIE and "probability augment \> replace" for all Great Britain local authorities (red) with Greater Manchester boroughs in blue. OLS regression lines are overlaid. There's a striking pattern for Greater Manchester here. The previous relationship identified - firms with higher exposure (AIIE) tend to *also* have a higher probability of augmentable than replaceable jobs - is supported by the regression lines for both employee count groups, across Great Britain as a whole. But Greater Manchester differs in a few key ways. Most obviously, the slope for 4+ employee firms in GM is *negative*: higher exposure in GM boroughs tends to be associated with higher probability of *replaceable* jobs, on average - unlike the rest of Great Britain. For smalle 1-3 employee firms, GM does match the Great Britain slope (exposure and augmentability go together) - but GM's slope is in a different position. Overall, GM firms of the same exposure as other parts of Great Britain tend to have "higher probability replaceable" jobs. (It could equally be read as the slope being further right: jobs with similar aug\>replace probability to the rest of Great Britain tend to be more exposed on average).
+-   Figures @fig-augrepl1to3 (1 to 3 employees per firm) and @fig-augrepl4plus (4+ employees) do the same for the separate "probability job is augmentable" and "replaceable" measures on each axis. For 1-3 employee firms, the Great Britain relationship as a whole is spread out. Greater Manchester shares that - there's no clear pattern, with error bars also overlapping. However, for 4+ firms again, GM stands out. This is useful contrast to @fig-aiie_v_prob1to3 - while that figure is saying "GM boroughs with similar exposure to other parts of Great Britain tend to have more replaceable than augmentable jobs than the GB average," this one seems to show that - setting aside actual AI exposure - GM boroughs have higher augmentability chance per job than replacability, compared to equivalent Great Britain points. One interpretation of this *could* be that, if firms currently not so 'exposed' found ways to apply AI, they would more likely find jobs augmentable.
 
 ### Percent of jobs in the top Great Britain deciles of each measure
 
-* For @fig-decilesaiie_v_augrepl and @fig-deciles_aug_v_repl, every job in Great Britain is ranked and allocated to deciles for the two pairs of measures (AIIE vs 'aug > replace'; 'augmentable' vs 'replaceable). The two plots then show the percent of jobs in each local authority that are in the **top 10% in Great Britain** (most exposed vs highest augment vs replace prob, then highest aug and replace prob separately). By definition, 10% of jobs overall will be in the top decile - the plots mark that 10% line, showing if GM boroughs are above or below that average. This is concentrating not on the averages, but on the smaller section of most exposed firms and checking how they compare nationally. Both figures suggest Manchester, Stockport and Trafford have more than the average number of jobs in top most exposed / highest augment probability decile, in both plots. @fig-deciles_aug_v_repl, comparing the two separate aug and replace measures, shows most GM boroughs with fewer jobs than the GB average in the top decile for each. 
+-   For @fig-decilesaiie_v_augrepl and @fig-deciles_aug_v_repl, every job in Great Britain is ranked and allocated to deciles for the two pairs of measures (AIIE vs 'aug \> replace'; 'augmentable' vs 'replaceable). The two plots then show the percent of jobs in each local authority that are in the **top 10% in Great Britain** (most exposed vs highest augment vs replace prob, then highest aug and replace prob separately). By definition, 10% of jobs overall will be in the top decile - the plots mark that 10% line, showing if GM boroughs are above or below that average. This is concentrating not on the averages, but on the smaller section of most exposed firms and checking how they compare nationally. Both figures suggest Manchester, Stockport and Trafford have more than the average number of jobs in top most exposed / highest augment probability decile, in both plots. @fig-deciles_aug_v_repl, comparing the two separate aug and replace measures, shows most GM boroughs with fewer jobs than the GB average in the top decile for each.
 
+# Data / methods
 
+## Companies House data
+
+UK firm-level data has been extracted from Companies House, for accounts filed July 2024 to 2025. Data extracted includes employee numbers on the date of account submission and also the year previously, as well as sector SIC codes down to 5 digit level. Firms can assign themselves up to four different SIC Codes. All of these are used in assigning AI index values - each SIC code is given equal weight, averaging values for each. Only firms with at least one employee are used. Not all firms have employee counts - of those that have at least one employee, nearly 43% are single-person firms. Firms are geocoded based on their address postcode, allowing a choice of granular geographies.
 
 # Full results
 
 ## AI Industry Exposure (AIIE) applied to UK Companies House data
 
-Felten's AIIE is applied to individual firms in UK Companies House data [method]. This is done for accounts filed July 2024-25. 
+In this section, results are **summarised per MSOA** in Greater Manchester (and core cities for comparison) and **broken down into three groups**: firms with 1-3 employees, firms with 4 to 9 employees and 9+ employee firms.
 
-Here, these results are **summarised per MSOA** in Greater Manchester (and core cities for comparison) and **broken down into three groups**: firms with 1-3 employees, firms with 4 to 9 employees and 9+ employee firms.
+-   AIIE on the x axis. Higher values are more exposed firms. Data is normalised, so an AIIE of zero is the mean value and 1 is a single standard deviation.
+-   An AIIE average (weighted by employee number) is found for each MSOA, broken into the 3 firm size groups.
+-   Local authorities are ordered top to bottom by average AIIE overall. Greater Manchester boroughs are larger, bolder points; core cities are smaller/fainter.
 
-* AIIE on the x axis. Higher values are more exposed firms. Data is normalised, so an AIIE of zero is the mean value and 1 is a single standard deviation.
-* An AIIE average (weighted by employee number) is found for each MSOA, broken into the 3 firm size groups.
-* Local authorities are ordered top to bottom by average AIIE overall. Greater Manchester boroughs are larger, bolder points; core cities are smaller/fainter.
+Three things jump out.
 
-Three things jump out. 
-
-1. Firms with 1 to 3 employees (green down-pointing triangles) are generally in more exposed sectors than other sized firms (though with overlap) and clearly more exposed than firms with 4-9 employees (red squares).
-2. That pattern is stronger in some places (Trafford, Stockport, Bolton) than others
-3. The overall AIIE exposure level per borough is mostly consistent within them, for different size firms. So Rochdale, Oldham, Tameside and Wigan are overall lower on the AIIE measure.
-
-
-
+1.  Firms with 1 to 3 employees (green down-pointing triangles) are generally in more exposed sectors than other sized firms (though with overlap) and clearly more exposed than firms with 4-9 employees (red squares).
+2.  That pattern is stronger in some places (Trafford, Stockport, Bolton) than others
+3.  The overall AIIE exposure level per borough is mostly consistent within them, for different size firms. So Rochdale, Oldham, Tameside and Wigan are overall lower on the AIIE measure.
 
 ```{r, fig-aiiemsoa}
 #| fig-height: 11
@@ -151,8 +141,6 @@ ggplot(msoa_both %>% filter(type != 'other'),
 
 ```
 
-
-
 ## UK Census 2021 Occupation data linked to Felten et al AI Occupational Exposure (AIOE): Greater Manchester local authorities + core cities
 
 Census 2021 data at MSOA level contains 104 occupation categories. These are linked to Felten et al's AI Occupation Exposure (AIOE) and a weighted AIOE average worked out again (weighted by person counts in each occupation).
@@ -163,9 +151,9 @@ So - this shows something different to the previous plot: the occupational expos
 
 Things to note from this one:
 
-* While the overall spread is less far from the mean (the AIOE is also normalised), some local authorities are clearly much more exposed, on this measure. For example, Trafford has very few MSOAs less than the AIOE mean.
-* Residents in Greater Manchester and core cities' MSOAs tend to be on the 'more exposed' side of zero.
-* With some differences, the overall average order of local authorities doesn't differ hugely from that found in firm level data.
+-   While the overall spread is less far from the mean (the AIOE is also normalised), some local authorities are clearly much more exposed, on this measure. For example, Trafford has very few MSOAs less than the AIOE mean.
+-   Residents in Greater Manchester and core cities' MSOAs tend to be on the 'more exposed' side of zero.
+-   With some differences, the overall average order of local authorities doesn't differ hugely from that found in firm level data.
 
 ```{r, fig-aioemsoa}
 #| fig-height: 9
@@ -256,27 +244,23 @@ ggplot(msoa.aioe.avs %>% filter(type != 'other'),
 
 ```
 
-
-
 # Initial results for 'jobs/tasks augmentable' versus 'jobs/tasks replaceable'
 
 This section contains initial outputs from repeat LLM runs to extract probabilities for UK sectors having jobs/tasks that are (a) likely augmentable by AI; (b) likely replaceable by AI (running on a local instance of Llama 3.1).
-
 
 ## AIIE vs augmentability
 
 This first plot does the following:
 
-* X axis: Felten's AI Industrial Exposure (AIIE). Higher values are more exposed 1000m hexes in Greater Manchester (as in the interactive maps above).
-* Y axis: "probability a job is more augmentable than replaceable (aug > replace)" within a sector (equivalent to complementarity index), applied to firms in Companies House.
-* Circle size is employee count per 1000m hex.
-* Broken down by Greater Manchester borough.
+-   X axis: Felten's AI Industrial Exposure (AIIE). Higher values are more exposed 1000m hexes in Greater Manchester (as in the interactive maps above).
+-   Y axis: "probability a job is more augmentable than replaceable (aug \> replace)" within a sector (equivalent to complementarity index), applied to firms in Companies House.
+-   Circle size is employee count per 1000m hex.
+-   Broken down by Greater Manchester borough.
 
 Some things to note:
 
-* The same positive relationship seen in other results - more exposed jobs are on average also in more augmentable-jobs sectors
-* Bottom right quadrant is the "high exposure plus jobs more likely to be replaceable" hexes. There aren't many of these, though most boroughs have one or two (with central Manchester having the most jobs in this quadrant). Note though, this is a probability - so e.g. an augmentable value of 0.6 would still on average suggest 40% of jobs in that sector could be replaceable.
-
+-   The same positive relationship seen in other results - more exposed jobs are on average also in more augmentable-jobs sectors
+-   Bottom right quadrant is the "high exposure plus jobs more likely to be replaceable" hexes. There aren't many of these, though most boroughs have one or two (with central Manchester having the most jobs in this quadrant). Note though, this is a probability - so e.g. an augmentable value of 0.6 would still on average suggest 40% of jobs in that sector could be replaceable.
 
 ```{r, fig-aiie_v_augrepl_hexscatter}
 #| fig-height: 13
@@ -298,24 +282,22 @@ ggplot(
 
 ```
 
-
-## Bivariate hexmaps for AIIE vs "aug > replace"
+## Bivariate hexmaps for AIIE vs "aug \> replace"
 
 This and the next few plots are **bivariate maps** - each axis has three values of 'low / medium / high', making **nine possible combinations** of the two of them.
 
 These two maps:
 
-* Puts 'probability job is more augmentable than replaceable' **(aug>repl)** along one axis, with Felten's **AIIE** exposure index on the other. 
-* The first is for **firms with 1 to 3 employees**, the second for **firms with 4+ employees**.
-* Data for firms is summarised per 1000m hex (averages weighted by employee count and across any of the , as above).
-* Hexes are only shown if they have a **min of 10 employees in them**.
+-   Puts 'probability job is more augmentable than replaceable' **(aug\>repl)** along one axis, with Felten's **AIIE** exposure index on the other.
+-   The first is for **firms with 1 to 3 employees**, the second for **firms with 4+ employees**.
+-   Data for firms is summarised per 1000m hex (averages weighted by employee count and across any of the , as above).
+-   Hexes are only shown if they have a **min of 10 employees in them**.
 
 So for example, in the map of firms with 1 to 3 employees:
 
-* The darkest hexes in the south of Greater Manchester are high aug>rep (highest probability of jobs being more augmentable than replaceable) and also high AIIE (they have most AI exposure).
-* There are only a few hexes with the legend's top left clear blue - high exposure but jobs more likely to be replaceable.
-* In both maps, there are large areas of high exposure with the middle aug>rep probability (jobs likely a mix of both augmentable and replaceable).
-
+-   The darkest hexes in the south of Greater Manchester are high aug\>rep (highest probability of jobs being more augmentable than replaceable) and also high AIIE (they have most AI exposure).
+-   There are only a few hexes with the legend's top left clear blue - high exposure but jobs more likely to be replaceable.
+-   In both maps, there are large areas of high exposure with the middle aug\>rep probability (jobs likely a mix of both augmentable and replaceable).
 
 ### 1 to 3 employees
 
@@ -419,21 +401,15 @@ tm_shape(sq.ch %>% rename(aug = augmentBT_weightedbyemployees, repl = replaceBT_
 
 ```
 
-
-
-
 # 'Augmentable' and 'replaceable' each on their own scale
 
 Here, two *separate* indices have been generated that each rank sectors as 'jobs more/less likely to be (1) replaceable and (2) augmentable in this sector compared to other sectors'.
 
 These two indices are made by 'competing' repeated sectors against each other (using the probabilities assigned from the LLM) and putting these pairwise outcomes into a [Bradley Terry](https://en.wikipedia.org/wiki/Bradley%E2%80%93Terry_model){target="_blank"} model to produce a 'sector x more likely to be augmentable than y' ranking. These are then mean-centred (keeping the relative log-likelihoods between sectors intact).
 
-
-
 ## Where (270 3 digit SIC) sectors are located on the separate aug / replace axes
 
-This first interactive plot just shows those two scales on each axis to illustrate where the method places each sector - **hover for sector name**. 
-
+This first interactive plot just shows those two scales on each axis to illustrate where the method places each sector - **hover for sector name**.
 
 ```{r}
 
@@ -452,7 +428,6 @@ ggplotly(p, tooltip = 'label')
 
 ```
 
-
 ## Separate augment / replace hexmaps
 
 These maps put 'probability augmentable (high/medium/low)' and 'probability replaceable (high/medium/low)' on separate axes, again meaning there are nine possible values.
@@ -461,10 +436,9 @@ As above, there is one map for 'firms with 1 to 3 employees' and a second for 'f
 
 Some comments on these two maps:
 
-* There's an obvious stark difference for 1-3 employee vs 4+ employee firms - for 1-3s, there are large areas with lower augmentable and medium to high replacable.
-* Though there's a cluster (matching the one above for aug>repl vs AIIE) that's low replaceable / medium augmentable (which fits with 'prob aug is more than prob replace' but here we can get a better idea of the actual scale of both).
-* The 4+ map has a lot more hexes in the max category for *both* aug and replace.
-
+-   There's an obvious stark difference for 1-3 employee vs 4+ employee firms - for 1-3s, there are large areas with lower augmentable and medium to high replacable.
+-   Though there's a cluster (matching the one above for aug\>repl vs AIIE) that's low replaceable / medium augmentable (which fits with 'prob aug is more than prob replace' but here we can get a better idea of the actual scale of both).
+-   The 4+ map has a lot more hexes in the max category for *both* aug and replace.
 
 ### Firms with 1 to 3 employees
 
@@ -517,8 +491,6 @@ tm_shape(sq.ch %>% rename(aug = augmentBT_weightedbyemployees, repl = replaceBT_
 
 ```
 
-
-
 ### Firms with 4+ employees
 
 ```{r, fig-hexmap_augreplace4plus}
@@ -570,24 +542,20 @@ tm_shape(sq.ch %>% rename(aug = augmentBT_weightedbyemployees, repl = replaceBT_
 
 ```
 
-
-
 # Greater Manchester boroughs compared to rest of GB local authorities
 
 Local-authority-level means for the different measures (firm level, weighted by employee number), and broken down by firms with 1 to 3 employees versus 4+ employees.
 
 Things to note:
 
-* For exposure versus "probability jobs are more augmentable than replaceable", the pattern for 1-3 employee sized firms versus 4+ stands out. Micro firms in GM appear to be more augmentable as they become more exposed; the slope is reversed for 4+ sized firms, where higher exposure correlates to more likely replaceable jobs. That slope goes against the general slope for other local authorities.
-* AIIE vs aug>repl for 1-3 sized firms in GM is a similar slope to other places but **on average** tracking lower, suggesting slightly lower mean augmentability.
-* Aug v replace on separate axes is generally more varied across GB, and GM boroughs are positioned all over that map for micro-firms. 
-* Though for 4+ size firms in GM, separate aug/replace appears to tell a different story to above for 1-3 sized - the final plot suggests the augment slope is to the right of GB on average, so GM boroughs have a slightly higher probability of augmentable than replaceable jobs overall for 4+ firms. 
+-   For exposure versus "probability jobs are more augmentable than replaceable", the pattern for 1-3 employee sized firms versus 4+ stands out. Micro firms in GM appear to be more augmentable as they become more exposed; the slope is reversed for 4+ sized firms, where higher exposure correlates to more likely replaceable jobs. That slope goes against the general slope for other local authorities.
+-   AIIE vs aug\>repl for 1-3 sized firms in GM is a similar slope to other places but **on average** tracking lower, suggesting slightly lower mean augmentability.
+-   Aug v replace on separate axes is generally more varied across GB, and GM boroughs are positioned all over that map for micro-firms.
+-   Though for 4+ size firms in GM, separate aug/replace appears to tell a different story to above for 1-3 sized - the final plot suggests the augment slope is to the right of GB on average, so GM boroughs have a slightly higher probability of augmentable than replaceable jobs overall for 4+ firms.
 
-
-## AIIE vs "probability aug > replace"
+## AIIE vs "probability aug \> replace"
 
 ### For firms with 1 to 3 employees
-
 
 ```{r, fig-aiie_v_prob1to3}
 
@@ -666,8 +634,6 @@ p <- ggplot(LAsummary2 %>%
 p
 ```
 
-
-
 ## Augment v replace separately
 
 ### For firms with 1 to 3 employees
@@ -705,7 +671,6 @@ p
 
 ```
 
-
 ### For firms with 4+ employees
 
 ```{r, fig-augrepl4plus}
@@ -742,15 +707,13 @@ p
 
 ```
 
-
 ## Job deciles
 
-In this section, every job in Great Britain is ranked and allocated to deciles for the two pairs of measures used above (AIIE vs 'aug > replace'; 'augmentable' vs 'replaceable). The two plots below then show the percent of jobs in each local authority that are in the **top 10% in Great Britain** (most exposed, highest augment vs replace prob, highest aug and replace prob separately).
+In this section, every job in Great Britain is ranked and allocated to deciles for the two pairs of measures used above (AIIE vs 'aug \> replace'; 'augmentable' vs 'replaceable). The two plots below then show the percent of jobs in each local authority that are in the **top 10% in Great Britain** (most exposed, highest augment vs replace prob, highest aug and replace prob separately).
 
 By definition, 10% of jobs overall will be in the top decile - the plots mark that 10% line, showing if GM boroughs are above or below that average.
 
-### AIIE v aug>repl
-
+### AIIE v aug\>repl
 
 ```{r, fig-decilesaiie_v_augrepl}
 
@@ -783,8 +746,6 @@ ggplot() +
 
 ```
 
-
-
 ```{r, fig-deciles_aug_v_repl}
 
 ggplot() +
@@ -813,20 +774,13 @@ ggplot() +
 
 ```
 
-
-
-
-
-
-
-
 # Extra bits
 
 ## Same AIOE occupation exposure data, but just at local authority level
 
-I've included this just to make a quick point. This is the same data as the last plot, but with weighted mean and standard deviation applied at the local authority level. 
+I've included this just to make a quick point. This is the same data as the last plot, but with weighted mean and standard deviation applied at the local authority level.
 
-The points are the means; bars are one standard deviation. 
+The points are the means; bars are one standard deviation.
 
 While the means do differ, each local authority's spread of AIOE covers a very similar level of exposure from top to bottom. **What I'm taking from this: important differences show up at the sub-local authority level.**
 
@@ -895,9 +849,3 @@ ggplot(la.aioe.avs %>% filter(type != 'other'),
 
 
 ```
-
-
-
-
-
-
