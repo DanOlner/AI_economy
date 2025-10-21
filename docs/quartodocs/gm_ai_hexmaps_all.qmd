@@ -102,6 +102,12 @@ sq.ch <- sq %>%
     by = 'id'
   )
 
+tm_shape(lad) +
+  tm_polygons(fill = '#a6baa8') +
+  # tm_polygons(fill = '#93ba98') +
+  # tm_polygons(fill = '#5f6e61') +
+  tm_shape(itl2) +
+  tm_borders(col = 'black', lwd = 4) +
 tm_shape(sq.ch %>% rename(aug = augmentBT_weightedbyemployees, repl = replaceBT_weightedbyemployees, AIIE = AIIE_weightedbyemployees, `aug>rep` = augmentmorethanreplaceprob_weightedbyemployees)) +
   tm_polygons(
     fill = tm_vars(c("AIIE", "aug>rep"),
@@ -114,9 +120,8 @@ tm_shape(sq.ch %>% rename(aug = augmentBT_weightedbyemployees, repl = replaceBT_
                   # values = "stevens.bluered")) +
                   values = "bu_br_bivs")) +
   tm_shape(lad) +
-  tm_borders(col = 'black', lwd = 1, fill_alpha = 0.3) +
-  tm_shape(itl2) +
-  tm_borders(col = 'black', lwd = 4) 
+  tm_borders(col = 'black', lwd = 1, fill_alpha = 0.3) 
+  
 
 
 ```
@@ -153,6 +158,12 @@ sq.ch <- sq %>%
     by = 'id'
   )
 
+tm_shape(lad) +
+  tm_polygons(fill = '#a6baa8') +
+  # tm_polygons(fill = '#93ba98') +
+  # tm_polygons(fill = '#5f6e61') +
+  tm_shape(itl2) +
+  tm_borders(col = 'black', lwd = 4) +
 tm_shape(sq.ch %>% rename(aug = augmentBT_weightedbyemployees, repl = replaceBT_weightedbyemployees, AIIE = AIIE_weightedbyemployees, `aug>rep` = augmentmorethanreplaceprob_weightedbyemployees)) +
   tm_polygons(
     fill = tm_vars(c("AIIE", "aug>rep"),
@@ -165,9 +176,9 @@ tm_shape(sq.ch %>% rename(aug = augmentBT_weightedbyemployees, repl = replaceBT_
                   # values = "stevens.bluered")) +
                   values = "bu_br_bivs")) +
   tm_shape(lad) +
-  tm_borders(col = 'black', lwd = 1, fill_alpha = 0.3) +
-  tm_shape(itl2) +
-  tm_borders(col = 'black', lwd = 4) 
+  tm_borders(col = 'black', lwd = 1, fill_alpha = 0.3) 
+  # tm_shape(itl2) +
+  # tm_borders(col = 'black', lwd = 4) 
 
 
 ```
@@ -243,6 +254,12 @@ sq.ch <- sq %>%
     by = 'id'
   )
 
+tm_shape(lad) +
+  tm_polygons(fill = '#a6baa8') +
+  # tm_polygons(fill = '#93ba98') +
+  # tm_polygons(fill = '#5f6e61') +
+  tm_shape(itl2) +
+  tm_borders(col = 'black', lwd = 4) +
 tm_shape(sq.ch %>% rename(aug = augmentBT_weightedbyemployees, repl = replaceBT_weightedbyemployees, AIIE = AIIE_weightedbyemployees, `aug>rep` = augmentmorethanreplaceprob_weightedbyemployees)) +
   tm_polygons(
     # fill = tm_vars(c("AIIE", "aug>rep"),
@@ -255,9 +272,9 @@ tm_shape(sq.ch %>% rename(aug = augmentBT_weightedbyemployees, repl = replaceBT_
                   # values = "stevens.bluered")) +
                   values = "bu_br_bivs")) +
   tm_shape(lad) +
-  tm_borders(col = 'black', lwd = 1, fill_alpha = 0.3) +
-  tm_shape(itl2) +
-  tm_borders(col = 'black', lwd = 4) 
+  tm_borders(col = 'black', lwd = 1, fill_alpha = 0.3) 
+  # tm_shape(itl2) +
+  # tm_borders(col = 'black', lwd = 4) 
 
 
 ```
@@ -294,10 +311,72 @@ sq.ch <- sq %>%
     by = 'id'
   )
 
+tm_shape(lad) +
+  tm_polygons(fill = '#a6baa8') +
+  # tm_polygons(fill = '#93ba98') +
+  # tm_polygons(fill = '#5f6e61') +
+  tm_shape(itl2) +
+  tm_borders(col = 'black', lwd = 4) +
 tm_shape(sq.ch %>% rename(aug = augmentBT_weightedbyemployees, repl = replaceBT_weightedbyemployees, AIIE = AIIE_weightedbyemployees, `aug>rep` = augmentmorethanreplaceprob_weightedbyemployees)) +
   tm_polygons(
     # fill = tm_vars(c("AIIE", "aug>rep"),
     fill = tm_vars(c("aug", "repl"),
+                   multivariate = TRUE),
+              fill.scale = 
+                tm_scale_bivariate(
+                  scale1 = tm_scale_intervals(style = "fisher", n = 3, labels = c("L", "M", "H")),
+                  scale2 = tm_scale_intervals(style = "fisher", n = 3, labels = c("L", "M", "H")),
+                  # values = "stevens.bluered")) +
+                  values = "bu_br_bivs")) +
+  tm_shape(lad) +
+  tm_borders(col = 'black', lwd = 1, fill_alpha = 0.3) 
+  # # tm_shape(itl2) +
+  # tm_borders(col = 'black', lwd = 4) 
+
+
+```
+
+
+```{r eval= F}
+# Hexmap for interaction, putting here for ease of making
+tmap_mode('view')
+tmap_mode('plot')
+
+employeecountperhexmin = 1
+
+hexsummary <- overlay %>% 
+  st_set_geometry(NULL) %>% 
+  # filter(Employees_thisyear > 0) %>% #Only firms with employees recorded in latest year
+  filter(between(Employees_thisyear,1,3)) %>% #Microfirms
+  # filter(between(Employees_thisyear,4,9)) %>% #Microfirms
+  # filter(Employees_thisyear > 9) %>% 
+  group_by(id) %>% 
+  summarise(
+    AIIE_weightedbyemployees = weighted.mean(AIIEfinal,Employees_thisyear),
+    augmentmorethanreplaceprob_weightedbyemployees = weighted.mean(augment_morethan_replace_prob,Employees_thisyear),
+    augmentBT_weightedbyemployees = weighted.mean(augment_logability_BT,Employees_thisyear),
+    replaceBT_weightedbyemployees = weighted.mean(replace_logability_BT,Employees_thisyear),
+    totalemployees = sum(Employees_thisyear),
+    totalfirms = n(),
+    la = max(localauthority_name)
+  ) %>% 
+  group_by(id) %>%
+  filter(sum(totalemployees) >= employeecountperhexmin) %>% #keep only gridsquares where total employee count is more than / equal to 100
+  ungroup()
+
+#Link that back into the grid squares...
+#Use right join to drop empties
+sq.ch <- sq %>% 
+  right_join(
+    hexsummary,
+    by = 'id'
+  )
+
+tm_shape(sq.ch %>% rename(aug = augmentBT_weightedbyemployees, repl = replaceBT_weightedbyemployees, AIIE = AIIE_weightedbyemployees, `aug>rep` = augmentmorethanreplaceprob_weightedbyemployees)) +
+  tm_basemap(c(StreetMap = "OpenStreetMap")) +
+  tm_polygons(fill_alpha = 0.7,
+    fill = tm_vars(c("AIIE", "aug>rep"),
+    # fill = tm_vars(c("aug", "repl"),
                    multivariate = TRUE),
               fill.scale = 
                 tm_scale_bivariate(
@@ -311,5 +390,8 @@ tm_shape(sq.ch %>% rename(aug = augmentBT_weightedbyemployees, repl = replaceBT_
   tm_borders(col = 'black', lwd = 4) 
 
 
+
 ```
+
+
 
