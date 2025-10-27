@@ -48,6 +48,8 @@ sq <- readRDS('../../local/data/sq_forhexoverlay.rds')
 itl2 <- readRDS('../../local/data/itl2_for_GM.rds')
 lad <- readRDS('../../local/data/las_for_GM.rds')
 
+gmlas <- readRDS('../../data/gmlas.rds')
+
 ```
 
 # Greater Manchester AI exposure, augmentability and replaceability
@@ -62,6 +64,22 @@ Both are linked to Companies House firm level data for Greater Manchester.
 
 -   [Map 1:](https://danolner.github.io/AI_economy/maps/GM_AI_FeltenAIIE_avweightedbyemployees_CompaniesHouse.html){target="_blank"} Greater Manchester AI Industry Exposure hexmap (opens in new tab). Using Companies House data, all firm sizes.
 -   [Map 2:](https://danolner.github.io/AI_economy/maps/GM_AI_FeltenAIIE_avweightedbyemployees_CompaniesHouseFirms1to3employees.html){target="_blank"} Same but using **just** firms with 1 to 3 employees.
+
+## Method
+
+This analysis is built on two sources to create two distinct AI measures, each with two sub-indices. First, we use data produced by [Felten et al](https://sms.onlinelibrary.wiley.com/doi/full/10.1002/smj.3286){target="_blank"} (2021)[^1]. They created two indices - an 'AI Industrial Exposure' (AIIE) index that assigns exposure values to U.S. sectors, and an 'AI Occupational Exposure' (AIOE) index that does the same for occupation codes. Each are normalised, so that their centre value is zero - effectively, they give a relative measure of 'less to more exposed' across the full range of industrial and occupation categories. (The original data is available [here](https://github.com/AIOE-Data/AIOE){target="_blank"}.)
+
+[^1]: Felten, E., Raj, M., Seamans, R., 2021. Occupational, industry, and geographic exposure to artificial intelligence: A novel dataset and its potential uses. Strategic Management Journal 42, 2195–2217.
+
+The U.S. industry data (NAICS) was 'cross-walked' to U.K Standard Industrial Classification data from the ONS, matching against what were the most appropriate SIC codes. These varied from 2 to 5 digit codes. An algorithm was then used to apply AIIE values to firm data from UK Companies House that 'cascaded' the most appropriate AIIE value at the most granular level possible, by applying 5 digit values where possible, then 4 digit, then 3, then 2. Firms in Companies House use up to four different 5 digit SIC codes, though most use only one. The AIIE was averaged for any firms using more than one. This produced specific AIIE values for each UK firm. When applying the Companies House AIIE per-firm values to the analysis, these are always weighted by the number of employees per firm if, for example, producing a weighted average for UK geographies or sectors.
+
+To utilise Felten's occupation measure - the AIOE, based on O\*NET - we applied its values to UK Census data for 2021, again cross-walking from U.S. to U.K occupation codes. Those values match much more easily than sector codes, making it relatively straightforward to create an AI measure that estimates how much *residents* are exposed where they live (rather than firms).
+
+For the second distinct AI measure, we use automated assessment using an LLM to produce probability values, following a similar method to Henseke et al (2025)[^2]. Where they prompt an LLM to produce probabilities for task exposure, here we separately generate repeat-sample values for "probability sector jobs may be replaceable by AI" and "probably sector jobs may be augmentable by AI", using a locally-run instance of Llama 3.1. These repeat probabilities are then used to produce two different kinds of value. Firstly, "probability augmentable" and "probability replaceable" are repeatedly run against each other for all sampled values within 3 digit SIC sectors to produce a spread of "job is more likely augmentable than replaceable". This is a single dimension value. Secondly, values within each of 'augmentable' and 'replaceable' are used as probabilities within a Bradley Terry model, where pairwise comparisons between repeat probabilities can be used to produce log-likelihoods of a sector 'winning' over another sector, allowing all sectors to ranked separately on 'augmentable' and 'replaceable' axes. They strongly correlate, but it is useful to be able to think about the two measures as applying separately to different tasks and jobs within sectors.
+
+[^2]: Henseke, G., Davies, R., Felstead, A., Gallie, D., Green, F., Zhou, Y., 2025. How Exposed Are UK Jobs to Generative AI? Developing and Applying a Novel Task-Based Index.
+
+It is important to note that both Felten et al's measure and the 'augment versus replace' measures are relative - sectors and occupations may be higher or lower on these different exposure scales, but no claim is made about specific jobs or firms being likely to, for example, lose a certain proportion of jobs. A firm higher on 'replaceable jobs' values is just more likely *relative to* another firm lower down the scale.
 
 ## One paragraph summaries of findings from figures, with fig-hover references
 
@@ -624,6 +642,20 @@ p
 ```{r, fig-aiie_v_prob4plus}
 
 LAsummary2 <- readRDS('../../local/data/LAsummary_4plus_employees_4_AI_measures_weightedmeans.rds')
+
+#Save copy for export, put GM LAs at top
+write_csv(
+  LAsummary2 %>% 
+    mutate(
+      is_gm = localauthority_name %in% gmlas
+    ) %>% 
+    relocate(is_gm, .after = localauthority_name) %>% 
+    relocate(AIIEfinal_weightedmean, .before = augment_morethan_replace_prob_weightedmean) %>% 
+    arrange(-is_gm) %>%  
+    select(localauthority_name:augment_morethan_replace_prob_weightedmean),
+  '../../local/data/la_AI_summarymeans_forGB.csv'
+)
+
 
 #AIIE vs aug>repl
 #"Set labels to the empty string "" to hide them. All data points repel the non-empty labels."

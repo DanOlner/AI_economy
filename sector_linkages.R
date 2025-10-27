@@ -2267,7 +2267,7 @@ ggplot(both, aes(x = AIIE_weightedbyemployees, y = AIOE_weightedmean)) +
 # msoa_both <- readRDS('../../local/data/msoa_3firmsizes_AIIE.rds')
 msoa_both <- readRDS('local/data/msoa_3firmsizes_AIIE.rds')
 
-msoa.geo <- st_read('../../../MapPolygons/EnglandWalesMerged/Middle_layer_Super_Output_Areas_December_2021_Boundaries_EW_BGC_V3_-3870998653275641389.geojson') %>% 
+msoa.geo <- st_read('/Users/danolner/Library/CloudStorage/Dropbox/MapPolygons/EnglandWalesMerged/Middle_layer_Super_Output_Areas_December_2021_Boundaries_EW_BGC_V3_-3870998653275641389.geojson') %>% 
   select(MSOA21CD)
 
 ch_all_aiie = readRDS('local/data/ch_all_aiie_draft1.rds')
@@ -2339,8 +2339,8 @@ msoa.geo.gm = msoa.geo %>%
 
 
 # E02006963 is the outlier
-tmap_mode('view')
-tmap_mode('plot')
+# tmap_mode('view')
+# tmap_mode('plot')
 
 p = tm_shape(msoa.geo.gm %>% rename(AIIE = AIIE_weightedbyemployees)) +
   tm_polygons(
@@ -2354,6 +2354,45 @@ p = tm_shape(msoa.geo.gm %>% rename(AIIE = AIIE_weightedbyemployees)) +
   tm_borders(col = 'black', lwd = 4) 
 
 tmap_save(p, 'local/outputs/gm_msoa_aiiemap_redhigh.jpeg', width = 10, height = 8)  
+
+
+# repeating for single GM boroughs (scale will be different for each)
+# One as example
+
+
+plotboroughmap = function(laname){
+
+  # Make a masking layer
+  mask = st_bbox(lad %>% filter(LAD24NM == laname)) %>% st_as_sfc()
+  mask = st_buffer(mask, dist = 2000, endCapStyle = "SQUARE")
+  
+  # Cut out la
+  mask = st_difference(mask, lad %>% filter(LAD24NM == laname))
+  
+  p = tm_basemap("OpenStreetMap") +
+    tm_shape(mask) +#add in masking layer for rest of basemap
+    tm_polygons(col = 'white', fill = 'white') +
+    tm_shape(msoa.geo.gm %>% filter(localauthority_name == laname) %>% rename(AIIE = AIIE_weightedbyemployees),
+             is.main = TRUE) +
+    tm_polygons(
+      fill_alpha = 0.75,
+      fill = 'AIIE', fill.scale = tm_scale_continuous(values = "-matplotlib.rd_yl_bu"),
+      lwd = 0.1,
+      fill.legend = tm_legend(position = c('right','bottom'))
+      ) +
+    tm_shape(lad %>% filter(LAD24NM == laname)) +
+    tm_borders(col = 'black', lwd = 2) +
+    tm_title(laname, )
+    # tm_shape(itl2) +
+    # tm_borders(col = 'black', lwd = 4) 
+  
+  tmap_save(p, paste0('local/outputs/borough_aiiemaps/',laname,'_msoa_aiiemap_redhigh.jpeg'), width = 10, height = 8)  
+
+}
+
+# Repeat for each borough
+map(unique(lad$LAD24NM), plotboroughmap)
+
 
 
 # OK good. Now to say something about what characterises that Salford high AIIE MSOA, sector and firm wise
