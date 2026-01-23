@@ -13,16 +13,15 @@ source('functions/ad_hoc_functions.R')
 itl2name = 'South Yorkshire'
 
 #Geographies
-itl2 <- st_read('../RegionalEcons_web/data/ITL_geographies/International_Territorial_Level_2_January_2021_UK_BFE_V2_2022_-4735199360818908762/ITL2_JAN_2021_UK_BFE_V2.shp') %>% st_simplify(preserveTopology = T, dTolerance = 100) %>% 
-  filter(qg('manchester',ITL221NM))
+itl2 <- st_read('../RegionalEconomicTools/data/ITL_geographies/International_Territorial_Level_2_January_2021_UK_BFE_V2_2022_-4735199360818908762/ITL2_JAN_2021_UK_BFE_V2.shp') %>% st_simplify(preserveTopology = T, dTolerance = 100) %>% 
+  filter(qg(itl2name,ITL221NM))
 
 
 lad <- st_read("~/Dropbox/MapPolygons/UK/2024/Local_Authority_Districts_May_2024_Boundaries_UK_BFC/LAD_MAY_2024_UK_BFC.shp") %>% st_simplify(preserveTopology = T, dTolerance = 100)
 
-lad <- lad %>% filter(LAD24NM %in% unique(ch$localauthority_name[ch$ITL221NM==itl2name]))
-
 ch <- readRDS('local/data/ch_with_4AIE_measures.rds')
 
+lad <- lad %>% filter(LAD24NM %in% unique(ch$localauthority_name[ch$ITL221NM==itl2name]))
 
 ch_sub <- ch %>% filter(ITL221NM == itl2name)
 
