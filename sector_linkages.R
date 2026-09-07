@@ -2635,7 +2635,7 @@ ggsave('local/outputs/AIOE_manchester.png', width = 6, height = 2)
 #   filter(sum(totalemployees) >= 10) %>% #keep only gridsquares where total employee count is more than / equal to 100
 #   ungroup()
 
-hexsummary <- readRDS('../../local/data/hexsummary.rds')
+hexsummary <- readRDS('local/data/hexsummary.rds')
 
 # This is the original
 ggplot(
@@ -2673,6 +2673,64 @@ ggplot(
   guides(alpha = F)
 
 ggsave('local/outputs/AIIE_v_augrepl_hexmeans_salford_v_restofGM_fixedscale.png', width = 6, height = 8)
+
+
+# Manchester vs rest of GM facet
+ggplot(
+  hexsummary %>% 
+    rename(AIIE = AIIE_weightedbyemployees, `aug > replace` = augmentmorethanreplaceprob_weightedbyemployees) %>% 
+    mutate(
+      is_manc = ifelse(la == 'Manchester','Manchester','Other GM'),
+      is_manc = factor(is_manc, levels = c('Manchester','Other GM'))
+      )
+    ,
+  aes(x = AIIE, y = `aug > replace`, size = totalemployees, alpha = is_manc)) +
+  # geom_point(alpha = 0.3) +
+  geom_point() +
+  scale_alpha_manual(values = c(0.4,0.2)) +
+  scale_size(range = c(2,20)) +
+  geom_vline(xintercept = 0) +
+  geom_hline(yintercept = 0.5) +
+  # geom_smooth(method = 'lm') +
+  facet_wrap(~is_manc, ncol = 1) +
+  guides(alpha = F)
+
+ggsave('local/outputs/AIIE_v_augrepl_hexmeans_manc_v_restofGM_fixedscale.png', width = 6, height = 8)
+
+# On same plot
+ggplot(
+  hexsummary %>% 
+    rename(AIIE = AIIE_weightedbyemployees, `aug > replace` = augmentmorethanreplaceprob_weightedbyemployees) %>% 
+    mutate(
+      is_manc = ifelse(la == 'Manchester','Manchester','Other GM'),
+      is_manc = factor(is_manc, levels = c('Manchester','Other GM'))
+      )
+    ,
+  aes(x = AIIE, y = `aug > replace`, size = totalemployees, alpha = is_manc, colour = is_manc, fill = is_manc)) +
+  # geom_point(alpha = 0.3) +
+  geom_point() +
+  scale_alpha_manual(values = c(0.6,0.17)) +
+  scale_color_brewer(palette = 'Set1') +
+  scale_fill_brewer(palette = 'Set1') +
+  scale_size(range = c(2,20)) +
+  geom_vline(xintercept = 0) +
+  geom_hline(yintercept = 0.5) +
+  # geom_smooth(method = 'lm') +
+  # facet_wrap(~is_manc, ncol = 1) +
+  guides(alpha = F)
+
+ggsave('local/outputs/AIIE_v_augrepl_hexmeans_manc_v_restofGM_overlay.png', width = 8, height = 8)
+
+
+
+
+
+
+
+
+
+
+
 
 
 
