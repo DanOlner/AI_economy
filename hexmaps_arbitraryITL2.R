@@ -88,3 +88,7 @@ tm_shape(sq.ch %>% rename(aug = augmentBT_weightedbyemployees, repl = replaceBT_
   tm_shape(itl2) +
   tm_borders(col = 'black', lwd = 4) +
   tm_view(set_view = c(-2.2,53.49326048352635,11))#centred on GM
+
+tmap_save(filename = 'local/sy_ai_hex2d.png', width = 1800)
+
+

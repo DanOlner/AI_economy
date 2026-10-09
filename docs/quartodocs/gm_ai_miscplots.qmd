@@ -73,7 +73,7 @@ This analysis is built on two sources to create two distinct AI measures, each w
 
 The U.S. industry data (NAICS) was 'cross-walked' to U.K Standard Industrial Classification data from the ONS, matching against what were the most appropriate SIC codes. These varied from 2 to 5 digit codes. An algorithm was then used to apply AIIE values to firm data from UK Companies House that 'cascaded' the most appropriate AIIE value at the most granular level possible, by applying 5 digit values where applicable, then 4 digit, then 3, then 2. Firms in Companies House use up to four different 5 digit SIC codes, though most have only one. The AIIE was averaged for any firms using more than one. This produced specific AIIE values for each UK firm. When applying the Companies House AIIE per-firm values to the analysis, these are always weighted by the number of employees per firm if, for example, producing a weighted average for UK geographies or sectors.
 
-To utilise Felten's occupation measure - the AIOE, based on O\*NET - we applied its values to UK Census data for 2021, again cross-walking from U.S. to U.K occupation codes. Those values match much more easily than sector codes, making it relatively straightforward to create an AI measure that estimates how much *residents* are exposed where they live (rather than firms).
+To utilise Felten's occupation measure - the AIOE, based on O\*NET - we applied its values to UK Census data for 2021, again cross-walking from U.S. to U.K occupation codes. Those values match much more easily than sector codes, making it relatively straightforward to create an AI measure that estimates how much *workers* are exposed where they work (rather than firms). (Note: if workers were working from home - very common during the pandemic, when the Census was taken - they are counted at home, not in their workplace.)
 
 For the second distinct AI measure, we use automated assessment using an LLM to produce probability values, following a similar method to Henseke et al (2025)[^2]. Where they prompt an LLM to produce probabilities for task exposure, here we separately generate repeat-sample values for "probability sector jobs may be replaceable by AI" and "probably sector jobs may be augmentable by AI", using a locally-run instance of Llama 3.1. These repeat probabilities are then used to produce two different kinds of value. Firstly, "probability augmentable" and "probability replaceable" are repeatedly run against each other for all sampled values within 3 digit SIC sectors to produce a spread of "job is more likely augmentable than replaceable". This is a single dimension value. Secondly, values within each of 'augmentable' and 'replaceable' are used as probabilities within a Bradley Terry model, where pairwise comparisons between repeat probabilities can be used to produce log-likelihoods of a sector 'winning' over another sector, allowing all sectors to ranked separately on 'augmentable' and 'replaceable' axes. The two measures strongly correlate, but it is useful to be able to think about the two measures as applying separately to different tasks and jobs within sectors.
 
@@ -88,7 +88,7 @@ Includes some repeated text from below. **Hover over figure references for previ
 ### Figures linking Felten AI exposure indices to UK data
 
 -   @fig-aiiemsoa shows Felten's AI industrial exposure (AIIE) index applied to firms from Companies House data, in Greater Manchester boroughs, at MSOA level (with other core cities for comparison). Firms with 1 to 3 employees (green down-pointing triangles) are generally in more exposed sectors than other sized firms (though with overlap) and clearly more exposed than firms with 4-9 employees (red squares). That pattern is stronger in some places (Trafford, Stockport, Bolton) than others. The overall AIIE exposure level per borough is mostly consistent within them, for different size firms. So Rochdale, Oldham, Tameside and Wigan are overall lower on the AIIE measure.
--   @fig-aioemsoa instead links Felten's AI **occupational** (AIOE) exposure index to *residents* in Greater Manchester MSOAs (using Census 2021 data), again comparing boroughs against other core cities. While the overall spread is less far from the mean (the AIOE is also normalised), some local authorities are clearly much more exposed, on this measure. For example, Trafford has very few MSOAs less than the AIOE mean. Residents in Greater Manchester and core cities’ MSOAs tend to be on the ‘more exposed’ side of zero. With some differences, the overall average order of local authorities doesn’t differ hugely from that found in firm level data.
+-   @fig-aioemsoa instead links Felten's AI **occupational** (AIOE) exposure index to *workers* in Greater Manchester MSOAs (using Census 2021 data; see note below on pandemic effect - home workers measured as at home), again comparing boroughs against other core cities. While the overall spread is less far from the mean (the AIOE is also normalised), some local authorities are clearly much more exposed, on this measure. For example, Trafford has very few MSOAs less than the AIOE mean. Workers in Greater Manchester and core cities’ MSOAs tend to be on the ‘more exposed’ side of zero. With some differences, the overall average order of local authorities doesn’t differ hugely from that found in firm level data.
 
 ### Adding in separate LLM-produced measures for 'probability of job being augmentable' and 'probability of job being replaceable'
 
@@ -159,18 +159,18 @@ ggplot(msoa_both %>% filter(type != 'other'),
 
 ```
 
-## UK Census 2021 Occupation data linked to Felten et al AI Occupational Exposure (AIOE): Greater Manchester local authorities + core cities
+## UK Census 2021 workplace occupation data linked to Felten et al AI Occupational Exposure (AIOE): Greater Manchester local authorities + core cities
 
 Census 2021 data at MSOA level contains 104 occupation categories. These are linked to Felten et al's AI Occupation Exposure (AIOE) and a weighted AIOE average worked out again (weighted by person counts in each occupation).
 
 (Census data is used as it provides the best current mix of coverage and granularity, though it is now older).
 
-So - this shows something different to the previous plot: the occupational exposure of **people who live in these MSOAs** (rather than firms' exposure in the above plot).
+So - this shows something different to the previous plot: the occupational exposure of **people who work in these MSOAs** (rather than firms' exposure in the above plot). (Though note the point above - in 2021, people working from home were counted at home.)
 
 Things to note from this one:
 
 -   While the overall spread is less far from the mean (the AIOE is also normalised), some local authorities are clearly much more exposed, on this measure. For example, Trafford has very few MSOAs less than the AIOE mean.
--   Residents in Greater Manchester and core cities' MSOAs tend to be on the 'more exposed' side of zero.
+-   Workers in Greater Manchester and core cities' MSOAs tend to be on the 'more exposed' side of zero.
 -   With some differences, the overall average order of local authorities doesn't differ hugely from that found in firm level data.
 
 ```{r, fig-aioemsoa}
